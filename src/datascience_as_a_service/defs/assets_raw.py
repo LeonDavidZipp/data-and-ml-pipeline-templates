@@ -18,10 +18,16 @@ Additional packages required per asset (install with ``uv add <pkg>``):
 
 import dagster as dg
 import duckdb
-import httpx
 import polars as pl
-from deltalake import DeltaTable, write_deltalake  # type: ignore
+from deltalake import DeltaTable  # type: ignore
+from deltalake.exceptions import TableNotFoundError
 
+from datascience_as_a_service.resources import (
+    DuckDBResource,
+    HttpResource,
+    PostgresResource,
+)
+from datascience_as_a_service.utils import S3Config
 
 # ---------------------------------------------------------------------------
 # PostgreSQL
@@ -29,21 +35,51 @@ from deltalake import DeltaTable, write_deltalake  # type: ignore
 
 
 @dg.asset(group_name="raw")
-def ingest_postgres(context: dg.AssetExecutionContext) -> dg.MaterializeResult[None]:
+def ingest_postgres(
+    context: dg.AssetExecutionContext,
+    postgres: PostgresResource,
+    config: S3Config,
+) -> dg.MaterializeResult[None]:
     target_bucket = "raw"
     target_table = "postgres_table"
 
-    connection_uri = "postgresql://dp_pg_user:supersecret@postgres:5432/dp_db"
     df = pl.read_database_uri(
         "SELECT * FROM source_table LIMIT 100000",
-        connection_uri,
+        postgres.connection_uri,
         engine="connectorx",
     )
 
-    context.log.info(f"Loaded {df.height:,} rows from PostgreSQL → {target_bucket}/{target_table}")
+    context.log.info(
+        f"Loaded {df.height:,} rows from PostgreSQL → {target_bucket}/{target_table}"
+    )
 
-    # TODO: write df to Delta at s3://{target_bucket}/{target_table}
-    return dg.MaterializeResult(value=None, metadata={"row_count": dg.MetadataValue.int(df.height)})
+    arrow_data = df.to_arrow()  # type: ignore
+    opts = config.model_dump()
+    uri = f"s3://{target_bucket}/{target_table}"
+    try:
+        (
+            DeltaTable(uri, storage_options=opts)
+            .merge(
+                arrow_data,  # type: ignore
+                predicate="t.placeholder = s.placeholder",
+                target_alias="t",
+                source_alias="s",
+            )
+            .when_matched_update_all()
+            .when_not_matched_insert_all()
+            .execute()
+        )
+    except TableNotFoundError:
+        df.write_delta(  # type: ignore
+            uri,
+            mode="error",
+            storage_options=opts,
+        )
+    except Exception as e:
+        raise e
+    return dg.MaterializeResult(
+        value=None, metadata={"row_count": dg.MetadataValue.int(df.height)}
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -52,18 +88,25 @@ def ingest_postgres(context: dg.AssetExecutionContext) -> dg.MaterializeResult[N
 
 
 @dg.asset(group_name="raw")
-def ingest_duckdb(context: dg.AssetExecutionContext) -> dg.MaterializeResult[None]:
+def ingest_duckdb(
+    context: dg.AssetExecutionContext,
+    duckdb_source: DuckDBResource,
+) -> dg.MaterializeResult[None]:
     target_bucket = "raw"
     target_table = "duckdb_table"
 
-    con = duckdb.connect("/path/to/source.duckdb", read_only=True)
+    con = duckdb.connect(duckdb_source.path, read_only=duckdb_source.read_only)
     df: pl.DataFrame = con.execute("SELECT * FROM source_table").pl()
     con.close()
 
-    context.log.info(f"Loaded {df.height:,} rows from DuckDB → {target_bucket}/{target_table}")
+    context.log.info(
+        f"Loaded {df.height:,} rows from DuckDB → {target_bucket}/{target_table}"
+    )
 
     # TODO: write df to Delta at s3://{target_bucket}/{target_table}
-    return dg.MaterializeResult(value=None, metadata={"row_count": dg.MetadataValue.int(df.height)})
+    return dg.MaterializeResult(
+        value=None, metadata={"row_count": dg.MetadataValue.int(df.height)}
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -72,24 +115,23 @@ def ingest_duckdb(context: dg.AssetExecutionContext) -> dg.MaterializeResult[Non
 
 
 @dg.asset(group_name="raw")
-def ingest_http(context: dg.AssetExecutionContext) -> dg.MaterializeResult[None]:
+def ingest_http(
+    context: dg.AssetExecutionContext,
+    http: HttpResource,
+) -> dg.MaterializeResult[None]:
     target_bucket = "raw"
     target_table = "http_table"
 
-    url = "https://api.example.com/data"
-    params: dict[str, str] = {}
-    headers: dict[str, str] = {"Authorization": "Bearer <token>"}
-
-    with httpx.Client(timeout=30) as client:
-        response = client.get(url, params=params, headers=headers)
-        response.raise_for_status()
-        records = response.json() 
+    records = http.get("/data")
 
     df = pl.DataFrame(records)
-    context.log.info(f"Loaded {df.height:,} rows from HTTP → {target_bucket}/{target_table}")
+    context.log.info(
+        f"Loaded {df.height:,} rows from HTTP → {target_bucket}/{target_table}"
+    )
 
-    # TODO: write df to Delta at s3://{target_bucket}/{target_table}
-    return dg.MaterializeResult(value=None, metadata={"row_count": dg.MetadataValue.int(df.height)})
+    return dg.MaterializeResult(
+        value=None, metadata={"row_count": dg.MetadataValue.int(df.height)}
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -105,10 +147,14 @@ def ingest_csv(context: dg.AssetExecutionContext) -> dg.MaterializeResult[None]:
     source_path = "s3://raw/upstream/data.csv"  # local path or s3:// URI (needs s3fs)
     df = pl.read_csv(source_path)
 
-    context.log.info(f"Loaded {df.height:,} rows from CSV → {target_bucket}/{target_table}")
+    context.log.info(
+        f"Loaded {df.height:,} rows from CSV → {target_bucket}/{target_table}"
+    )
 
     # TODO: write df to Delta at s3://{target_bucket}/{target_table}
-    return dg.MaterializeResult(value=None, metadata={"row_count": dg.MetadataValue.int(df.height)})
+    return dg.MaterializeResult(
+        value=None, metadata={"row_count": dg.MetadataValue.int(df.height)}
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -121,13 +167,19 @@ def ingest_parquet(context: dg.AssetExecutionContext) -> dg.MaterializeResult[No
     target_bucket = "raw"
     target_table = "parquet_table"
 
-    source_path = "s3://raw/upstream/data.parquet"  # local path or s3:// URI (needs s3fs)
+    source_path = (
+        "s3://raw/upstream/data.parquet"  # local path or s3:// URI (needs s3fs)
+    )
     df = pl.read_parquet(source_path)
 
-    context.log.info(f"Loaded {df.height:,} rows from Parquet → {target_bucket}/{target_table}")
+    context.log.info(
+        f"Loaded {df.height:,} rows from Parquet → {target_bucket}/{target_table}"
+    )
 
     # TODO: write df to Delta at s3://{target_bucket}/{target_table}
-    return dg.MaterializeResult(value=None, metadata={"row_count": dg.MetadataValue.int(df.height)})
+    return dg.MaterializeResult(
+        value=None, metadata={"row_count": dg.MetadataValue.int(df.height)}
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -144,10 +196,14 @@ def ingest_xlsx(context: dg.AssetExecutionContext) -> dg.MaterializeResult[None]
     sheet_name = "Sheet1"  # name of the sheet to read
     df = pl.read_excel(source_path, sheet_name=sheet_name)
 
-    context.log.info(f"Loaded {df.height:,} rows from XLSX → {target_bucket}/{target_table}")
+    context.log.info(
+        f"Loaded {df.height:,} rows from XLSX → {target_bucket}/{target_table}"
+    )
 
     # TODO: write df to Delta at s3://{target_bucket}/{target_table}
-    return dg.MaterializeResult(value=None, metadata={"row_count": dg.MetadataValue.int(df.height)})
+    return dg.MaterializeResult(
+        value=None, metadata={"row_count": dg.MetadataValue.int(df.height)}
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -164,7 +220,11 @@ def ingest_json(context: dg.AssetExecutionContext) -> dg.MaterializeResult[None]
     # use pl.read_ndjson for newline-delimited JSON (NDJSON / JSON-L)
     df = pl.read_json(source_path)
 
-    context.log.info(f"Loaded {df.height:,} rows from JSON → {target_bucket}/{target_table}")
+    context.log.info(
+        f"Loaded {df.height:,} rows from JSON → {target_bucket}/{target_table}"
+    )
 
     # TODO: write df to Delta at s3://{target_bucket}/{target_table}
-    return dg.MaterializeResult(value=None, metadata={"row_count": dg.MetadataValue.int(df.height)})
+    return dg.MaterializeResult(
+        value=None, metadata={"row_count": dg.MetadataValue.int(df.height)}
+    )
