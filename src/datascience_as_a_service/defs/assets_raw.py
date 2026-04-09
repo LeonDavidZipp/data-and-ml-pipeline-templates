@@ -22,12 +22,12 @@ import polars as pl
 from deltalake import DeltaTable  # type: ignore
 from deltalake.exceptions import TableNotFoundError
 
-from datascience_as_a_service.resources import (
+from datascience_as_a_service.defs.resources import (
     DuckDBResource,
     HttpResource,
     PostgresResource,
+    S3Resource,
 )
-from datascience_as_a_service.utils import S3Config
 
 # ---------------------------------------------------------------------------
 # PostgreSQL
@@ -38,7 +38,7 @@ from datascience_as_a_service.utils import S3Config
 def ingest_postgres(
     context: dg.AssetExecutionContext,
     postgres: PostgresResource,
-    config: S3Config,
+    s3: S3Resource,
 ) -> dg.MaterializeResult[None]:
     target_bucket = "raw"
     target_table = "postgres_table"
@@ -54,7 +54,7 @@ def ingest_postgres(
     )
 
     arrow_data = df.to_arrow()  # type: ignore
-    opts = config.model_dump()
+    opts = s3.delta_storage_options
     uri = f"s3://{target_bucket}/{target_table}"
     try:
         (
