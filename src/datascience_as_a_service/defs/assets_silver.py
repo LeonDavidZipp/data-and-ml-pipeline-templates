@@ -27,8 +27,7 @@ def assets_silver(
     target_uri = f"s3://{target_bucket}/{target_table}"
 
     df = (
-        pl.read_delta(source_uri, storage_options=opts)
-        .lazy()
+        pl.scan_delta(source_uri, storage_options=opts)
         # TODO: add transformations here
         .collect()
     )
