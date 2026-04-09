@@ -1,0 +1,39 @@
+[project]
+name = "datascience_as_a_service"
+requires-python = ">=3.14,<3.15"
+version = "0.1.0"
+dependencies = [
+    "boto3>=1.42.86",
+    "dagster==1.12.22",
+    "deltalake>=1.5.0",
+    "duckdb>=1.5.1",
+    "httpx>=0.28.1",
+    "numpy>=2.2.6",
+    "pandas>=2.3.3",
+    "polars>=1.39.3",
+    "s3fs>=0.4.2",
+]
+
+[dependency-groups]
+dev = [
+    "dagster-webserver",
+    "dagster-dg-cli",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+force-include = { "pyproject.toml" = "pyproject.toml" }
+
+[tool.dg]
+directory_type = "project"
+
+[tool.dg.project]
+root_module = "datascience_as_a_service"
+registry_modules = [
+    "datascience_as_a_service.components.*",
+]
+
+
