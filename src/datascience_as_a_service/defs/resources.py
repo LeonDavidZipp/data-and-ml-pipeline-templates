@@ -4,6 +4,7 @@ from typing import Any
 
 import dagster as dg
 import s3fs  # type: ignore
+from dagster_mlflow import mlflow_tracking  # type: ignore[reportUnknownVariableType]
 
 # ---------------------------------------------------------------------------
 # PostgreSQL
@@ -101,5 +102,6 @@ def resources() -> dg.Definitions:
             "duckdb_source": DuckDBResource(),
             "http": HttpResource(),
             "s3": S3Resource(),
+            "mlflow": mlflow_tracking,
         },
     )
