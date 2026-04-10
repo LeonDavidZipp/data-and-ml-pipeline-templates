@@ -14,9 +14,9 @@ from dagster_mlflow import mlflow_tracking  # type: ignore[reportUnknownVariable
 class PostgresResource(dg.ConfigurableResource[Any]):
     host: str = "postgres"
     port: int = 5432
-    dbname: str = dg.EnvVar("POSTGRES_DB")
-    user: str = dg.EnvVar("POSTGRES_USER")
-    password: str = dg.EnvVar("POSTGRES_PASSWORD")
+    dbname: str = dg.EnvVar("DAGSTER_POSTGRES_DB")
+    user: str = dg.EnvVar("DAGSTER_POSTGRES_USER")
+    password: str = dg.EnvVar("DAGSTER_POSTGRES_PASSWORD")
 
     @property
     def connection_uri(self) -> str:

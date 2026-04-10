@@ -1,6 +1,7 @@
 services:
   mlflow:
     container_name: daas-mlflow
+    image: daas-mlflow
     build:
       context: .
       dockerfile: Dockerfile.mlflow
@@ -78,12 +79,12 @@ services:
       "
     restart: "no"
 
-
   # This service runs the postgres DB used by dagster for run storage, schedule storage,
   # and event log storage. Depending on the hardware you run this Compose on, you may be able
   # to reduce the interval and timeout in the healthcheck to speed up your `docker-compose up` times.
   postgres:
-    container_name: daas-db
+    container_name: daas-postgres
+    image: daas-postgres
     build:
       context: .
       dockerfile: Dockerfile.postgres
@@ -113,20 +114,17 @@ services:
   # its own port, and have its own entry in the workspace.yaml file that's loaded by the
   # webserver.
   dagster_user_code:
+    container_name: daas-dagster-user-code
+    image: daas-dagster-user-code-image
     build:
       context: .
-      dockerfile: ./Dockerfile_user_code
-    container_name: dagster_user_code
-    image: dagster_user_code_image
+      dockerfile: Dockerfile.dagsterusercode
     restart: always
     environment:
       DAGSTER_POSTGRES_USER: "${POSTGRES_USER:-dp_pg_user}"
       DAGSTER_POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-supersecret}"
       DAGSTER_POSTGRES_DB: "${POSTGRES_DB:-dp_db}"
-      DAGSTER_CURRENT_IMAGE: 'dagster_user_code_image'
-      POSTGRES_USER: "${POSTGRES_USER:-dp_pg_user}"
-      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-supersecret}"
-      POSTGRES_DB: "${POSTGRES_DB:-dp_db}"
+      DAGSTER_CURRENT_IMAGE: "daas-dagster-user-code-image"
       AWS_ENDPOINT_URL: "${AWS_ENDPOINT_URL:-http://minio:9000}"
       AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID:-dp_minio_user}"
       AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY:-supersecret}"
@@ -140,27 +138,29 @@ services:
   # Since our instance uses the QueuedRunCoordinator, any runs submitted from the webserver will be put on
   # a queue and later dequeued and launched by dagster-daemon.
   dagster_webserver:
+    container_name: daas-dagster-webserver
+    image: daas-dagster-webserver-image
     build:
       context: .
-      dockerfile: ./Dockerfile_dagster
+      dockerfile: Dockerfile.dagster
     entrypoint:
       - dagster-webserver
       - -h
-      - '0.0.0.0'
+      - "0.0.0.0"
       - -p
-      - '3000'
+      - "3000"
       - -w
       - workspace.yaml
-    container_name: dagster_webserver
     expose:
-      - '3000'
+      - "3000"
     ports:
-      - '3000:3000'
+      - "3000:3000"
     environment:
       DAGSTER_POSTGRES_USER: "${POSTGRES_USER:-dp_pg_user}"
       DAGSTER_POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-supersecret}"
       DAGSTER_POSTGRES_DB: "${POSTGRES_DB:-dp_db}"
-    volumes: # Make docker client accessible so we can terminate containers from the webserver
+    volumes:
+      # Make docker client accessible so we can terminate containers from the webserver
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp/io_manager_storage:/tmp/io_manager_storage
     networks:
@@ -174,19 +174,21 @@ services:
   # This service runs the dagster-daemon process, which is responsible for taking runs
   # off of the queue and launching them, as well as creating runs from schedules or sensors.
   dagster_daemon:
+    container_name: daas-dagster-daemon
+    image: daas-dagster-daemon-image
     build:
       context: .
-      dockerfile: ./Dockerfile_dagster
+      dockerfile: Dockerfile.dagster
     entrypoint:
       - dagster-daemon
       - run
-    container_name: dagster_daemon
     restart: on-failure
     environment:
       DAGSTER_POSTGRES_USER: "${POSTGRES_USER:-dp_pg_user}"
       DAGSTER_POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-supersecret}"
       DAGSTER_POSTGRES_DB: "${POSTGRES_DB:-dp_db}"
-    volumes: # Make docker client accessible so we can launch containers using host docker
+    volumes:
+      # Make docker client accessible so we can launch containers using host docker
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp/io_manager_storage:/tmp/io_manager_storage
     networks:
