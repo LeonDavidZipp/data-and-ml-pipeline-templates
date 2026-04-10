@@ -1,18 +1,21 @@
-FROM python:3.10-slim
+FROM python:slim-bookworm@sha256:980c03657c7c8bfbce5212d242ffe5caf69bfd8b6c8383e3580b27d028a6ddb3
 
-RUN pip install \
-    dagster \
-    dagster-postgres \
-    dagster-docker
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 
-# Add code location code
 WORKDIR /opt/dagster/app
-COPY src/datascience_as_a_service /opt/dagster/app
 
-# Run dagster code server on port 4000
+# Copy manifests first for layer caching
+COPY pyproject.toml uv.lock ./
+COPY src/ ./src/
+
+# Install project + deps; put venv on PATH so dagster is available
+RUN uv sync --frozen
+ENV PATH="/opt/dagster/app/.venv/bin:$PATH"
+
 EXPOSE 4000
 
-HEALTHCHECK --timeout=1s --start-period=3s --interval=3s --retries=20 CMD ["dagster", "api", "grpc-health-check", "-p", "4000"]
+HEALTHCHECK --timeout=1s --start-period=3s --interval=3s --retries=20 \
+    CMD dagster api grpc-health-check -p 4000
 
 # CMD allows this to be overridden from run launchers or executors to execute runs and steps
-CMD ["dagster", "code-server", "start", "-h", "0.0.0.0", "-p", "4000", "-f", "definitions.py"]
+CMD ["dagster", "code-server", "start", "-h", "0.0.0.0", "-p", "4000", "-f", "src/datascience_as_a_service/definitions.py"]
