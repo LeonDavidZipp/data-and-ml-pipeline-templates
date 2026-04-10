@@ -16,6 +16,9 @@ Additional packages required per asset (install with ``uv add <pkg>``):
     json      → polars
 """
 
+from io import IOBase
+from typing import IO, cast
+
 import dagster as dg
 import duckdb
 import polars as pl
@@ -40,11 +43,12 @@ def ingest_postgres(
     postgres: PostgresResource,
     s3: S3Resource,
 ) -> dg.MaterializeResult[None]:
+    source_key = "changeme"
     target_bucket = "raw"
     target_table = "postgres_table"
 
     df = pl.read_database_uri(
-        "SELECT * FROM source_table LIMIT 100000",
+        f"SELECT * FROM {source_key} LIMIT 100000",
         postgres.connection_uri,
         engine="connectorx",
     )
@@ -95,9 +99,8 @@ def ingest_duckdb(
     target_bucket = "raw"
     target_table = "duckdb_table"
 
-    con = duckdb.connect(duckdb_source.path, read_only=duckdb_source.read_only)
-    df: pl.DataFrame = con.execute("SELECT * FROM source_table").pl()
-    con.close()
+    with duckdb.connect(duckdb_source.path, read_only=duckdb_source.read_only) as con:
+        df: pl.DataFrame = con.execute("SELECT * FROM source_table").pl()
 
     context.log.info(
         f"Loaded {df.height:,} rows from DuckDB → {target_bucket}/{target_table}"
@@ -140,12 +143,17 @@ def ingest_http(
 
 
 @dg.asset(group_name="raw")
-def ingest_csv(context: dg.AssetExecutionContext) -> dg.MaterializeResult[None]:
+def ingest_csv(
+    context: dg.AssetExecutionContext,
+    s3: S3Resource,
+) -> dg.MaterializeResult[None]:
     target_bucket = "raw"
     target_table = "csv_table"
+    source_key = "raw/upstream/data.csv"
 
-    source_path = "s3://raw/upstream/data.csv"  # local path or s3:// URI (needs s3fs)
-    df = pl.read_csv(source_path)
+    fs = s3.get_filesystem()
+    with fs.open(source_key, mode="rb") as f:  # type: ignore[reportUnknownMemberType]
+        df = pl.read_csv(cast(IO[bytes], f))
 
     context.log.info(
         f"Loaded {df.height:,} rows from CSV → {target_bucket}/{target_table}"
@@ -163,14 +171,17 @@ def ingest_csv(context: dg.AssetExecutionContext) -> dg.MaterializeResult[None]:
 
 
 @dg.asset(group_name="raw")
-def ingest_parquet(context: dg.AssetExecutionContext) -> dg.MaterializeResult[None]:
+def ingest_parquet(
+    context: dg.AssetExecutionContext,
+    s3: S3Resource,
+) -> dg.MaterializeResult[None]:
     target_bucket = "raw"
     target_table = "parquet_table"
+    source_key = "raw/upstream/data.parquet"
 
-    source_path = (
-        "s3://raw/upstream/data.parquet"  # local path or s3:// URI (needs s3fs)
-    )
-    df = pl.read_parquet(source_path)
+    fs = s3.get_filesystem()
+    with fs.open(source_key, mode="rb") as f:  # type: ignore[reportUnknownMemberType]
+        df = pl.read_parquet(cast(IO[bytes], f))
 
     context.log.info(
         f"Loaded {df.height:,} rows from Parquet → {target_bucket}/{target_table}"
@@ -188,13 +199,18 @@ def ingest_parquet(context: dg.AssetExecutionContext) -> dg.MaterializeResult[No
 
 
 @dg.asset(group_name="raw")
-def ingest_xlsx(context: dg.AssetExecutionContext) -> dg.MaterializeResult[None]:
+def ingest_xlsx(
+    context: dg.AssetExecutionContext,
+    s3: S3Resource,
+) -> dg.MaterializeResult[None]:
     target_bucket = "raw"
     target_table = "xlsx_table"
+    source_key = "raw/upstream/source.xlsx"
+    sheet_name = "Sheet1"
 
-    source_path = "/path/to/source.xlsx"
-    sheet_name = "Sheet1"  # name of the sheet to read
-    df = pl.read_excel(source_path, sheet_name=sheet_name)
+    fs = s3.get_filesystem()
+    with fs.open(source_key, mode="rb") as f:  # type: ignore[reportUnknownMemberType]
+        df = pl.read_excel(cast(IO[bytes], f), sheet_name=sheet_name)
 
     context.log.info(
         f"Loaded {df.height:,} rows from XLSX → {target_bucket}/{target_table}"
@@ -212,13 +228,18 @@ def ingest_xlsx(context: dg.AssetExecutionContext) -> dg.MaterializeResult[None]
 
 
 @dg.asset(group_name="raw")
-def ingest_json(context: dg.AssetExecutionContext) -> dg.MaterializeResult[None]:
+def ingest_json(
+    context: dg.AssetExecutionContext,
+    s3: S3Resource,
+) -> dg.MaterializeResult[None]:
     target_bucket = "raw"
     target_table = "json_table"
+    source_key = "raw/upstream/source.json"
 
-    source_path = "/path/to/source.json"
+    fs = s3.get_filesystem()
     # use pl.read_ndjson for newline-delimited JSON (NDJSON / JSON-L)
-    df = pl.read_json(source_path)
+    with fs.open(source_key, mode="rb") as f:  # type: ignore[reportUnknownMemberType]
+        df = pl.read_json(cast(IOBase, f))
 
     context.log.info(
         f"Loaded {df.height:,} rows from JSON → {target_bucket}/{target_table}"
