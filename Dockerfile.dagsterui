@@ -1,0 +1,15 @@
+FROM python:slim-bookworm@sha256:980c03657c7c8bfbce5212d242ffe5caf69bfd8b6c8383e3580b27d028a6ddb3
+
+RUN pip install \
+    dagster \
+    dagster-postgres \
+    dagster-docker
+
+WORKDIR /opt/dagster/app
+COPY directory/with/your/code/ /opt/dagster/app
+
+EXPOSE 4000
+
+HEALTHCHECK --timeout=1s --start-period=3s --interval=3s --retries=20 CMD ["dagster", "api", "grpc-health-check", "-p", "4000"]
+
+CMD ["dagster", "code-server", "start", "-h", "0.0.0.0", "-p", "4000", "-f", "definitions.py"]
