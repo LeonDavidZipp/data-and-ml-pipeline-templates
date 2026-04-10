@@ -9,8 +9,8 @@ services:
     environment:
       MLFLOW_S3_ENDPOINT_URL: "${MLFLOW_S3_ENDPOINT_URL:-http://minio:9000}"
       MLFLOW_S3_IGNORE_TLS: "${MLFLOW_S3_IGNORE_TLS:-true}"
-      AWS_ACCESS_KEY_ID: "${MINIO_ROOT_USER:-dp_minio_user}"
-      AWS_SECRET_ACCESS_KEY: "${MINIO_ROOT_PASSWORD:-supersecret}"
+      AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID:-dp_minio_user}"
+      AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY:-supersecret}"
       MLFLOW_BACKEND_STORE_URI: "postgresql+psycopg2://${POSTGRES_USER:-dp_pg_user}:${POSTGRES_PASSWORD:-supersecret}@postgres/${POSTGRES_DB:-dp_db}"
       MLFLOW_DEFAULT_ARTIFACT_ROOT: "${MLFLOW_DEFAULT_ARTIFACT_ROOT:-s3://mlflow/}"
       MLFLOW_ARTIFACTS_DESTINATION: "${MLFLOW_ARTIFACTS_DESTINATION:-s3://mlflow/}"
@@ -40,8 +40,8 @@ services:
       - "${MINIO_PORT:-9000}:9000"
       - "${MINIO_CONSOLE_PORT:-8900}:8900"
     environment:
-      MINIO_ROOT_USER: "${MINIO_ROOT_USER:-dp_minio_user}"
-      MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD:-supersecret}"
+      MINIO_ROOT_USER: "${AWS_ACCESS_KEY_ID:-dp_minio_user}"
+      MINIO_ROOT_PASSWORD: "${AWS_SECRET_ACCESS_KEY:-supersecret}"
     volumes:
       - "minio:/data/minio"
     command: 'minio server /data/minio --console-address ":8900"'
@@ -59,8 +59,8 @@ services:
       minio:
         condition: service_healthy
     environment:
-      MINIO_ROOT_USER: "${MINIO_ROOT_USER:-dp_minio_user}"
-      MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD:-supersecret}"
+      MINIO_ROOT_USER: "${AWS_ACCESS_KEY_ID:-dp_minio_user}"
+      MINIO_ROOT_PASSWORD: "${AWS_SECRET_ACCESS_KEY:-supersecret}"
     entrypoint: >
       /bin/sh -c "
       mc alias set myminio http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD;
@@ -127,9 +127,9 @@ services:
       POSTGRES_USER: "${POSTGRES_USER:-dp_pg_user}"
       POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-supersecret}"
       POSTGRES_DB: "${POSTGRES_DB:-dp_db}"
-      AWS_ENDPOINT_URL: "${MLFLOW_S3_ENDPOINT_URL:-http://minio:9000}"
-      AWS_ACCESS_KEY_ID: "${MINIO_ROOT_USER:-dp_minio_user}"
-      AWS_SECRET_ACCESS_KEY: "${MINIO_ROOT_PASSWORD:-supersecret}"
+      AWS_ENDPOINT_URL: "${AWS_ENDPOINT_URL:-http://minio:9000}"
+      AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID:-dp_minio_user}"
+      AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY:-supersecret}"
       AWS_REGION: "${AWS_REGION:-us-east-1}"
       MLFLOW_TRACKING_URI: "${MLFLOW_URL:-http://mlflow:5000}"
       HTTP_API_TOKEN: "${HTTP_API_TOKEN:-}"
