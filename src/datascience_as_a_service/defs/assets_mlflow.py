@@ -3,6 +3,7 @@ import numpy as np
 import optuna
 import polars as pl
 import xgboost as xgb
+from dagster_mlflow import end_mlflow_on_run_finished
 from sklearn.metrics import (
     mean_absolute_error,  # type: ignore[reportUnknownVariableType]
     root_mean_squared_error,  # type: ignore[reportUnknownVariableType]
@@ -13,12 +14,10 @@ from sklearn.model_selection import (
 
 from datascience_as_a_service.defs.resources import S3Resource
 
-n_trials = 50
-n_estimators = 200
 
-
+@end_mlflow_on_run_finished  # type: ignore
 @dg.asset(group_name="ml", deps=["gold_features"], required_resource_keys={"mlflow"})
-def train_xgboost(
+def assets_mlflow(
     context: dg.AssetExecutionContext,
     s3: S3Resource,
 ) -> dg.MaterializeResult[None]:
@@ -108,7 +107,9 @@ def train_xgboost(
     train_rmse = float(root_mean_squared_error(y_train, preds_train))  # type: ignore[reportUnknownArgumentType]
     test_rmse = float(root_mean_squared_error(y_test, preds_test))  # type: ignore[reportUnknownArgumentType]
     test_mae = float(mean_absolute_error(y_test, preds_test))  # type: ignore[reportUnknownArgumentType]
-    test_r2 = float(1 - np.sum((y_test - preds_test) ** 2) / np.sum((y_test - np.mean(y_test)) ** 2))  # type: ignore[reportUnknownArgumentType]
+    test_r2 = float(
+        1 - np.sum((y_test - preds_test) ** 2) / np.sum((y_test - np.mean(y_test)) ** 2)  # type: ignore[reportUnknownArgumentType]
+    )
 
     mlf.log_metrics(
         {
@@ -145,4 +146,68 @@ def train_xgboost(
             "train_rows": dg.MetadataValue.int(len(X_train)),  # type: ignore[reportUnknownArgumentType]
             "test_rows": dg.MetadataValue.int(len(X_test)),  # type: ignore[reportUnknownArgumentType]
         },
+    )
+
+
+@dg.asset_check(asset=assets_mlflow)
+def check_model_improvement(
+    context: dg.AssetCheckExecutionContext,
+) -> dg.AssetCheckResult:
+    instance = context.instance
+    asset_key = assets_mlflow.key
+
+    records = instance.fetch_materializations(asset_key, limit=2).records
+
+    if len(records) < 2:
+        return dg.AssetCheckResult(
+            passed=True,
+            metadata={
+                "reason": dg.MetadataValue.text("No previous run to compare against")
+            },
+        )
+
+    current_mat = records[0].asset_materialization
+    previous_mat = records[1].asset_materialization
+
+    if current_mat is None or previous_mat is None:
+        return dg.AssetCheckResult(
+            passed=True,
+            metadata={
+                "reason": dg.MetadataValue.text("Materialization record missing")
+            },
+        )
+
+    current_meta = current_mat.metadata
+    previous_meta = previous_mat.metadata
+
+    current_rmse = current_meta.get("test_rmse")
+    previous_rmse = previous_meta.get("test_rmse")
+
+    if (
+        current_rmse is None
+        or previous_rmse is None
+        or current_rmse.value is None
+        or previous_rmse.value is None
+    ):
+        return dg.AssetCheckResult(
+            passed=False,
+            metadata={"reason": dg.MetadataValue.text("Missing test_rmse in metadata")},
+        )
+
+    current_val = float(current_rmse.value)  # type: ignore[arg-type]
+    previous_val = float(previous_rmse.value)  # type: ignore[arg-type]
+    improved = current_val <= previous_val
+
+    return dg.AssetCheckResult(
+        passed=improved,
+        metadata={
+            "current_test_rmse": dg.MetadataValue.float(current_val),
+            "previous_test_rmse": dg.MetadataValue.float(previous_val),
+            "delta": dg.MetadataValue.float(current_val - previous_val),
+        },
+        description=(
+            f"Model improved: {previous_val:.4f} -> {current_val:.4f}"
+            if improved
+            else f"Model regressed: {previous_val:.4f} -> {current_val:.4f}"
+        ),
     )
