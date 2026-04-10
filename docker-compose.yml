@@ -12,14 +12,14 @@ services:
       MLFLOW_S3_IGNORE_TLS: "${MLFLOW_S3_IGNORE_TLS:-true}"
       AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID:-dp_minio_user}"
       AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY:-supersecret}"
-      MLFLOW_BACKEND_STORE_URI: "postgresql+psycopg2://${POSTGRES_USER:-dp_pg_user}:${POSTGRES_PASSWORD:-supersecret}@postgres/${POSTGRES_DB:-dp_db}"
+      MLFLOW_BACKEND_STORE_URI: "postgresql+psycopg2://${POSTGRES_USER_MLFLOW:-mlflow_pg_user}:${POSTGRES_PASSWORD_MLFLOW:-supersecret}@postgres_mlflow/${POSTGRES_DB_MLFLOW:-mlflow_db}"
       MLFLOW_DEFAULT_ARTIFACT_ROOT: "${MLFLOW_DEFAULT_ARTIFACT_ROOT:-s3://mlflow/}"
       MLFLOW_ARTIFACTS_DESTINATION: "${MLFLOW_ARTIFACTS_DESTINATION:-s3://mlflow/}"
     entrypoint: mlflow server -h 0.0.0.0
     depends_on:
       createbuckets:
         condition: service_completed_successfully
-      postgres:
+      postgres_mlflow:
         condition: service_healthy
     healthcheck:
       test:
@@ -33,6 +33,8 @@ services:
       timeout: 10s
       retries: 10
     restart: "unless-stopped"
+    networks:
+      - dagster_network
 
   minio:
     container_name: daas-minio
@@ -52,13 +54,12 @@ services:
       timeout: 5s
       retries: 5
     restart: "unless-stopped"
+    networks:
+      - dagster_network
 
   createbuckets:
     container_name: daas-createbuckets
     image: minio/mc@sha256:95b5f3f7969a5c5a9f3a700ba72d5c84172819e13385aaf916e237cf111ab868
-    depends_on:
-      minio:
-        condition: service_healthy
     environment:
       MINIO_ROOT_USER: "${AWS_ACCESS_KEY_ID:-dp_minio_user}"
       MINIO_ROOT_PASSWORD: "${AWS_SECRET_ACCESS_KEY:-supersecret}"
@@ -78,34 +79,65 @@ services:
       exit 0;
       "
     restart: "no"
+    depends_on:
+      minio:
+        condition: service_healthy
+    networks:
+      - dagster_network
 
-  # This service runs the postgres DB used by dagster for run storage, schedule storage,
-  # and event log storage. Depending on the hardware you run this Compose on, you may be able
-  # to reduce the interval and timeout in the healthcheck to speed up your `docker-compose up` times.
-  postgres:
-    container_name: daas-postgres
-    image: daas-postgres
+  postgres_mlflow:
+    container_name: daas-postgres-mlflow
+    image: daas-postgres-mlflow
     build:
       context: .
       dockerfile: Dockerfile.postgres
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-dp_pg_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-supersecret}
-      POSTGRES_DB: ${POSTGRES_DB:-dp_db}
+      POSTGRES_USER: ${POSTGRES_USER_MLFLOW:-mlflow_pg_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD_MLFLOW:-supersecret}
+      POSTGRES_DB: ${POSTGRES_DB_MLFLOW:-mlflow_db}
     ports:
       - "5432:5432"
     volumes:
-      - pgdata:/var/lib/postgresql
+      - pgdata_mlflow:/var/lib/postgresql
     healthcheck:
       test:
         [
           "CMD-SHELL",
-          "pg_isready -U ${POSTGRES_USER:-dp_pg_user} -d ${POSTGRES_DB:-dp_db} -h localhost",
+          "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB -h localhost",
         ]
       interval: 5s
       timeout: 5s
       retries: 5
     restart: "unless-stopped"
+    networks:
+      - dagster_network
+
+  postgres_dagster:
+    container_name: daas-postgres-dagster
+    image: daas-postgres-dagster
+    build:
+      context: .
+      dockerfile: Dockerfile.postgres
+    environment:
+      POSTGRES_USER: ${DAGSTER_POSTGRES_USER:-dagster_pg_user}
+      POSTGRES_PASSWORD: ${DAGSTER_POSTGRES_PASSWORD:-supersecret}
+      POSTGRES_DB: ${DAGSTER_POSTGRES_DB:-dagster_db}
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata_dagster:/var/lib/postgresql
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB -h localhost",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: "unless-stopped"
+    networks:
+      - dagster_network
 
   # This service runs the gRPC server that loads your user code, in both dagster-webserver
   # and dagster-daemon. By setting DAGSTER_CURRENT_IMAGE to its own image, we tell the
@@ -121,15 +153,15 @@ services:
       dockerfile: Dockerfile.dagsterusercode
     restart: always
     environment:
-      DAGSTER_POSTGRES_USER: "${POSTGRES_USER:-dp_pg_user}"
-      DAGSTER_POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-supersecret}"
-      DAGSTER_POSTGRES_DB: "${POSTGRES_DB:-dp_db}"
+      DAGSTER_POSTGRES_USER: "${DAGSTER_POSTGRES_USER:-dagster_pg_user}"
+      DAGSTER_POSTGRES_PASSWORD: "${DAGSTER_POSTGRES_PASSWORD:-supersecret}"
+      DAGSTER_POSTGRES_DB: "${DAGSTER_POSTGRES_DB:-dagster_db}"
       DAGSTER_CURRENT_IMAGE: "daas-dagster-user-code-image"
       AWS_ENDPOINT_URL: "${AWS_ENDPOINT_URL:-http://minio:9000}"
       AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID:-dp_minio_user}"
       AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY:-supersecret}"
       AWS_REGION: "${AWS_REGION:-us-east-1}"
-      MLFLOW_TRACKING_URI: "${MLFLOW_URL:-http://mlflow:5000}"
+      MLFLOW_TRACKING_URI: "${MLFLOW_URL:-http://mlflow:5001}"
       HTTP_API_TOKEN: "${HTTP_API_TOKEN:-}"
     networks:
       - dagster_network
@@ -143,22 +175,14 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.dagster
-    entrypoint:
-      - dagster-webserver
-      - -h
-      - "0.0.0.0"
-      - -p
-      - "3000"
-      - -w
-      - workspace.yaml
     expose:
       - "3000"
     ports:
       - "3000:3000"
     environment:
-      DAGSTER_POSTGRES_USER: "${POSTGRES_USER:-dp_pg_user}"
-      DAGSTER_POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-supersecret}"
-      DAGSTER_POSTGRES_DB: "${POSTGRES_DB:-dp_db}"
+      DAGSTER_POSTGRES_USER: "${DAGSTER_POSTGRES_USER:-dagster_pg_user}"
+      DAGSTER_POSTGRES_PASSWORD: "${DAGSTER_POSTGRES_PASSWORD:-supersecret}"
+      DAGSTER_POSTGRES_DB: "${DAGSTER_POSTGRES_DB:-dagster_db}"
     volumes:
       # Make docker client accessible so we can terminate containers from the webserver
       - /var/run/docker.sock:/var/run/docker.sock
@@ -166,7 +190,7 @@ services:
     networks:
       - dagster_network
     depends_on:
-      postgres:
+      postgres_dagster:
         condition: service_healthy
       dagster_user_code:
         condition: service_healthy
@@ -184,9 +208,9 @@ services:
       - run
     restart: on-failure
     environment:
-      DAGSTER_POSTGRES_USER: "${POSTGRES_USER:-dp_pg_user}"
-      DAGSTER_POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-supersecret}"
-      DAGSTER_POSTGRES_DB: "${POSTGRES_DB:-dp_db}"
+      DAGSTER_POSTGRES_USER: "${DAGSTER_POSTGRES_USER:-dagster_pg_user}"
+      DAGSTER_POSTGRES_PASSWORD: "${DAGSTER_POSTGRES_PASSWORD:-supersecret}"
+      DAGSTER_POSTGRES_DB: "${DAGSTER_POSTGRES_DB:-dagster_db}"
     volumes:
       # Make docker client accessible so we can launch containers using host docker
       - /var/run/docker.sock:/var/run/docker.sock
@@ -194,7 +218,7 @@ services:
     networks:
       - dagster_network
     depends_on:
-      postgres:
+      postgres_dagster:
         condition: service_healthy
       dagster_user_code:
         condition: service_started
@@ -205,7 +229,9 @@ networks:
     name: dagster_network
 
 volumes:
-  pgdata:
+  pgdata_mlflow:
+    driver: local
+  pgdata_dagster:
     driver: local
   minio:
     driver: local
