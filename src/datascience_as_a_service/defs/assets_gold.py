@@ -13,7 +13,7 @@ from datascience_as_a_service.defs.resources import S3Resource
 
 
 @dg.asset(group_name="gold", deps=["changeme"])
-def gold_summary(
+def assets_gold(
     context: dg.AssetExecutionContext,
     s3: S3Resource,
 ) -> dg.MaterializeResult[None]:
