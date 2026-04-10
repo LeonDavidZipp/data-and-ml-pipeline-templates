@@ -12,7 +12,11 @@ from deltalake.exceptions import TableNotFoundError
 from datascience_as_a_service.defs.resources import S3Resource
 
 
-@dg.asset(group_name="gold", deps=["changeme"])
+@dg.asset(
+    group_name="gold",
+    deps=["changeme"],
+    automation_condition=dg.AutomationCondition.eager(),  # type: ignore
+)
 def assets_gold(
     context: dg.AssetExecutionContext,
     s3: S3Resource,
