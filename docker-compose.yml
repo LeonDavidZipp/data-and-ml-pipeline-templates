@@ -120,12 +120,21 @@ services:
     image: dagster_user_code_image
     restart: always
     environment:
-      DAGSTER_POSTGRES_USER: 'postgres_user'
-      DAGSTER_POSTGRES_PASSWORD: 'postgres_password'
-      DAGSTER_POSTGRES_DB: 'postgres_db'
+      DAGSTER_POSTGRES_USER: "${POSTGRES_USER:-dp_pg_user}"
+      DAGSTER_POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-supersecret}"
+      DAGSTER_POSTGRES_DB: "${POSTGRES_DB:-dp_db}"
       DAGSTER_CURRENT_IMAGE: 'dagster_user_code_image'
+      POSTGRES_USER: "${POSTGRES_USER:-dp_pg_user}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-supersecret}"
+      POSTGRES_DB: "${POSTGRES_DB:-dp_db}"
+      AWS_ENDPOINT_URL: "${MLFLOW_S3_ENDPOINT_URL:-http://minio:9000}"
+      AWS_ACCESS_KEY_ID: "${MINIO_ROOT_USER:-dp_minio_user}"
+      AWS_SECRET_ACCESS_KEY: "${MINIO_ROOT_PASSWORD:-supersecret}"
+      AWS_REGION: "${AWS_REGION:-us-east-1}"
+      MLFLOW_TRACKING_URI: "${MLFLOW_URL:-http://mlflow:5000}"
+      HTTP_API_TOKEN: "${HTTP_API_TOKEN:-}"
     networks:
-      - dagster_network
+      - docker_example_network
 
   # This service runs dagster-webserver, which loads your user code from the user code container.
   # Since our instance uses the QueuedRunCoordinator, any runs submitted from the webserver will be put on
@@ -148,9 +157,9 @@ services:
     ports:
       - '3000:3000'
     environment:
-      DAGSTER_POSTGRES_USER: 'postgres_user'
-      DAGSTER_POSTGRES_PASSWORD: 'postgres_password'
-      DAGSTER_POSTGRES_DB: 'postgres_db'
+      DAGSTER_POSTGRES_USER: "${POSTGRES_USER:-dp_pg_user}"
+      DAGSTER_POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-supersecret}"
+      DAGSTER_POSTGRES_DB: "${POSTGRES_DB:-dp_db}"
     volumes: # Make docker client accessible so we can terminate containers from the webserver
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp/io_manager_storage:/tmp/io_manager_storage
@@ -174,9 +183,9 @@ services:
     container_name: dagster_daemon
     restart: on-failure
     environment:
-      DAGSTER_POSTGRES_USER: 'postgres_user'
-      DAGSTER_POSTGRES_PASSWORD: 'postgres_password'
-      DAGSTER_POSTGRES_DB: 'postgres_db'
+      DAGSTER_POSTGRES_USER: "${POSTGRES_USER:-dp_pg_user}"
+      DAGSTER_POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-supersecret}"
+      DAGSTER_POSTGRES_DB: "${POSTGRES_DB:-dp_db}"
     volumes: # Make docker client accessible so we can launch containers using host docker
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp/io_manager_storage:/tmp/io_manager_storage
