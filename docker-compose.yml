@@ -1,11 +1,11 @@
 services:
   mlflow:
-    container_name: dp-mlflow
+    container_name: daas-mlflow
     build:
-      context: mlflow
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: Dockerfile.mlflow
     ports:
-      - "${MLFLOW_PORT:-5000}:5000"
+      - "${MLFLOW_PORT:-5001}:5000"
     environment:
       MLFLOW_S3_ENDPOINT_URL: "${MLFLOW_S3_ENDPOINT_URL:-http://minio:9000}"
       MLFLOW_S3_IGNORE_TLS: "${MLFLOW_S3_IGNORE_TLS:-true}"
@@ -34,7 +34,7 @@ services:
     restart: "unless-stopped"
 
   minio:
-    container_name: dp-minio
+    container_name: daas-minio
     image: minio/minio@sha256:13582eff79c6605a2d315bdd0e70164142ea7e98fc8411e9e10d089502a6d883
     ports:
       - "${MINIO_PORT:-9000}:9000"
@@ -53,7 +53,7 @@ services:
     restart: "unless-stopped"
 
   createbuckets:
-    container_name: dp-createbuckets
+    container_name: daas-createbuckets
     image: minio/mc@sha256:95b5f3f7969a5c5a9f3a700ba72d5c84172819e13385aaf916e237cf111ab868
     depends_on:
       minio:
@@ -77,16 +77,16 @@ services:
       exit 0;
       "
     restart: "no"
-    retries: 5
+
 
   # This service runs the postgres DB used by dagster for run storage, schedule storage,
   # and event log storage. Depending on the hardware you run this Compose on, you may be able
   # to reduce the interval and timeout in the healthcheck to speed up your `docker-compose up` times.
   postgres:
-    container_name: dp-db
+    container_name: daas-db
     build:
-      context: db
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: Dockerfile.postgres
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-dp_pg_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-supersecret}
@@ -134,7 +134,7 @@ services:
       MLFLOW_TRACKING_URI: "${MLFLOW_URL:-http://mlflow:5000}"
       HTTP_API_TOKEN: "${HTTP_API_TOKEN:-}"
     networks:
-      - docker_example_network
+      - dagster_network
 
   # This service runs dagster-webserver, which loads your user code from the user code container.
   # Since our instance uses the QueuedRunCoordinator, any runs submitted from the webserver will be put on
@@ -164,7 +164,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp/io_manager_storage:/tmp/io_manager_storage
     networks:
-      - docker_example_network
+      - dagster_network
     depends_on:
       postgres:
         condition: service_healthy
@@ -190,7 +190,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp/io_manager_storage:/tmp/io_manager_storage
     networks:
-      - docker_example_network
+      - dagster_network
     depends_on:
       postgres:
         condition: service_healthy
@@ -198,9 +198,9 @@ services:
         condition: service_started
 
 networks:
-  docker_example_network:
+  dagster_network:
     driver: bridge
-    name: docker_example_network
+    name: dagster_network
 
 volumes:
   pgdata:
