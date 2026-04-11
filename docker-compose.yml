@@ -2,24 +2,28 @@ services:
   mlflow:
     container_name: daas-mlflow
     image: daas/mlflow:latest
+    labels:
+      kompose.image-pull-policy: "IfNotPresent"
+      kompose.service.type: "nodeport"
     build:
       context: .
       dockerfile: Dockerfile.mlflow
     ports:
       - "${MLFLOW_PORT:-5001}:5000"
     environment:
+      MLFLOW_PORT: "5000"
       MLFLOW_S3_ENDPOINT_URL: "${MLFLOW_S3_ENDPOINT_URL:-http://minio:9000}"
       MLFLOW_S3_IGNORE_TLS: "${MLFLOW_S3_IGNORE_TLS:-true}"
       AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID:-dp_minio_user}"
       AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY:-supersecret}"
-      MLFLOW_BACKEND_STORE_URI: "postgresql+psycopg2://${POSTGRES_USER_MLFLOW:-mlflow_pg_user}:${POSTGRES_PASSWORD_MLFLOW:-supersecret}@postgres_mlflow/${POSTGRES_DB_MLFLOW:-mlflow_db}"
+      MLFLOW_BACKEND_STORE_URI: "postgresql+psycopg2://${POSTGRES_USER_MLFLOW:-mlflow_pg_user}:${POSTGRES_PASSWORD_MLFLOW:-supersecret}@postgres-mlflow/${POSTGRES_DB_MLFLOW:-mlflow_db}"
       MLFLOW_DEFAULT_ARTIFACT_ROOT: "${MLFLOW_DEFAULT_ARTIFACT_ROOT:-s3://mlflow/}"
       MLFLOW_ARTIFACTS_DESTINATION: "${MLFLOW_ARTIFACTS_DESTINATION:-s3://mlflow/}"
     entrypoint: mlflow server -h 0.0.0.0
     depends_on:
       createbuckets:
         condition: service_completed_successfully
-      postgres_mlflow:
+      postgres-mlflow:
         condition: service_healthy
     healthcheck:
       test:
@@ -85,9 +89,11 @@ services:
     networks:
       - dagster_network
 
-  postgres_mlflow:
+  postgres-mlflow:
     container_name: daas-postgres-mlflow
     image: daas/postgres:latest
+    labels:
+      kompose.image-pull-policy: "IfNotPresent"
     build:
       context: .
       dockerfile: Dockerfile.postgres
@@ -112,12 +118,11 @@ services:
     networks:
       - dagster_network
 
-  postgres_dagster:
+  postgres-dagster:
     container_name: daas-postgres-dagster
     image: daas/postgres:latest
-    build:
-      context: .
-      dockerfile: Dockerfile.postgres
+    labels:
+      kompose.image-pull-policy: "IfNotPresent"
     environment:
       POSTGRES_USER: ${DAGSTER_POSTGRES_USER:-dagster_pg_user}
       POSTGRES_PASSWORD: ${DAGSTER_POSTGRES_PASSWORD:-supersecret}
@@ -145,9 +150,11 @@ services:
   # Multiple containers like this can be deployed separately - each just needs to run on
   # its own port, and have its own entry in the workspace.yaml file that's loaded by the
   # webserver.
-  dagster_user_code:
+  dagster-user-code:
     container_name: daas-dagster-user-code
     image: daas/dagster-user-code:latest
+    labels:
+      kompose.image-pull-policy: "IfNotPresent"
     build:
       context: .
       dockerfile: Dockerfile.dagsterusercode
@@ -161,7 +168,7 @@ services:
       AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID:-dp_minio_user}"
       AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY:-supersecret}"
       AWS_REGION: "${AWS_REGION:-us-east-1}"
-      MLFLOW_TRACKING_URI: "${MLFLOW_URL:-http://mlflow:5001}"
+      MLFLOW_TRACKING_URI: "${MLFLOW_URL:-http://mlflow:5000}"
       HTTP_API_TOKEN: "${HTTP_API_TOKEN:-}"
     healthcheck:
       test: ["CMD", "dagster", "api", "grpc-health-check", "-p", "4000"]
@@ -175,14 +182,15 @@ services:
   # This service runs dagster-webserver, which loads your user code from the user code container.
   # Since our instance uses the QueuedRunCoordinator, any runs submitted from the webserver will be put on
   # a queue and later dequeued and launched by dagster-daemon.
-  dagster_webserver:
+  dagster-webserver:
     container_name: daas-dagster-webserver
     image: daas/dagster-webserver:latest
+    labels:
+      kompose.image-pull-policy: "IfNotPresent"
+      kompose.service.type: "nodeport"
     build:
       context: .
       dockerfile: Dockerfile.dagster
-    expose:
-      - "3000"
     ports:
       - "3000:3000"
     environment:
@@ -196,16 +204,18 @@ services:
     networks:
       - dagster_network
     depends_on:
-      postgres_dagster:
+      postgres-dagster:
         condition: service_healthy
-      dagster_user_code:
+      dagster-user-code:
         condition: service_healthy
 
   # This service runs the dagster-daemon process, which is responsible for taking runs
   # off of the queue and launching them, as well as creating runs from schedules or sensors.
-  dagster_daemon:
+  dagster-daemon:
     container_name: daas-dagster-daemon
     image: daas/dagster-daemon:latest
+    labels:
+      kompose.image-pull-policy: "IfNotPresent"
     build:
       context: .
       dockerfile: Dockerfile.dagster
@@ -224,9 +234,9 @@ services:
     networks:
       - dagster_network
     depends_on:
-      postgres_dagster:
+      postgres-dagster:
         condition: service_healthy
-      dagster_user_code:
+      dagster-user-code:
         condition: service_started
 
 networks:

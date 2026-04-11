@@ -1,5 +1,5 @@
 load_from:
   - grpc_server:
-      host: dagster_user_code
+      host: dagster-user-code
       port: 4000
       location_name: datascience_as_a_service
