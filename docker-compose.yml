@@ -1,7 +1,7 @@
 services:
   mlflow:
     container_name: daas-mlflow
-    image: daas-mlflow
+    image: daas/mlflow:latest
     build:
       context: .
       dockerfile: Dockerfile.mlflow
@@ -87,7 +87,7 @@ services:
 
   postgres_mlflow:
     container_name: daas-postgres-mlflow
-    image: daas-postgres-mlflow
+    image: daas/postgres:latest
     build:
       context: .
       dockerfile: Dockerfile.postgres
@@ -114,7 +114,7 @@ services:
 
   postgres_dagster:
     container_name: daas-postgres-dagster
-    image: daas-postgres-dagster
+    image: daas/postgres:latest
     build:
       context: .
       dockerfile: Dockerfile.postgres
@@ -147,7 +147,7 @@ services:
   # webserver.
   dagster_user_code:
     container_name: daas-dagster-user-code
-    image: daas-dagster-user-code-image
+    image: daas/dagster-user-code:latest
     build:
       context: .
       dockerfile: Dockerfile.dagsterusercode
@@ -156,13 +156,19 @@ services:
       DAGSTER_POSTGRES_USER: "${DAGSTER_POSTGRES_USER:-dagster_pg_user}"
       DAGSTER_POSTGRES_PASSWORD: "${DAGSTER_POSTGRES_PASSWORD:-supersecret}"
       DAGSTER_POSTGRES_DB: "${DAGSTER_POSTGRES_DB:-dagster_db}"
-      DAGSTER_CURRENT_IMAGE: "daas-dagster-user-code-image"
+      DAGSTER_CURRENT_IMAGE: "daas/dagster-user-code:latest"
       AWS_ENDPOINT_URL: "${AWS_ENDPOINT_URL:-http://minio:9000}"
       AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID:-dp_minio_user}"
       AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY:-supersecret}"
       AWS_REGION: "${AWS_REGION:-us-east-1}"
       MLFLOW_TRACKING_URI: "${MLFLOW_URL:-http://mlflow:5001}"
       HTTP_API_TOKEN: "${HTTP_API_TOKEN:-}"
+    healthcheck:
+      test: ["CMD", "dagster", "api", "grpc-health-check", "-p", "4000"]
+      interval: 3s
+      timeout: 1s
+      start_period: 3s
+      retries: 20
     networks:
       - dagster_network
 
@@ -171,7 +177,7 @@ services:
   # a queue and later dequeued and launched by dagster-daemon.
   dagster_webserver:
     container_name: daas-dagster-webserver
-    image: daas-dagster-webserver-image
+    image: daas/dagster-webserver:latest
     build:
       context: .
       dockerfile: Dockerfile.dagster
@@ -199,7 +205,7 @@ services:
   # off of the queue and launching them, as well as creating runs from schedules or sensors.
   dagster_daemon:
     container_name: daas-dagster-daemon
-    image: daas-dagster-daemon-image
+    image: daas/dagster-daemon:latest
     build:
       context: .
       dockerfile: Dockerfile.dagster
