@@ -16,7 +16,10 @@ from datascience_as_a_service.defs.resources import S3Resource
 
 
 @end_mlflow_on_run_finished  # type: ignore
-@dg.asset(group_name="ml", deps=["gold_features"], required_resource_keys={"mlflow"})
+@dg.asset(
+    group_name="ml",
+    # deps=["gold_features"]
+)
 def assets_mlflow(
     context: dg.AssetExecutionContext,
     s3: S3Resource,
