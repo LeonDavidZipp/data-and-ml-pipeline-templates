@@ -14,8 +14,4 @@ RUN pip install --no-cache-dir \
 
 EXPOSE 5000
 
-CMD mlflow server \
-    --backend-store-uri postgresql+psycopg2://${AWS_ACCESS_KEY_ID}:${AWS_SECRET_ACCESS_KEY}@postgres/mlflow \
-    --default-artifact-root s3://mlflow/ \
-    --artifacts-destination s3://mlflow/ \
-    -h 0.0.0.0
+CMD ["mlflow", "server", "-h", "0.0.0.0"]
