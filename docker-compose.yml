@@ -2,13 +2,9 @@ services:
   mlflow:
     container_name: daas-mlflow
     image: daas/mlflow:latest
-    labels:
-      kompose.image-pull-policy: "IfNotPresent"
     build:
       context: .
       dockerfile: Dockerfile.mlflow
-    expose:
-      - "5000"
     ports:
       - "${MLFLOW_PORT:-5001}:5000"
     environment:
@@ -92,8 +88,6 @@ services:
   postgres-mlflow:
     container_name: daas-postgres-mlflow
     image: daas/postgres:latest
-    labels:
-      kompose.image-pull-policy: "IfNotPresent"
     build:
       context: .
       dockerfile: Dockerfile.postgres
@@ -121,8 +115,6 @@ services:
   postgres-dagster:
     container_name: daas-postgres-dagster
     image: daas/postgres:latest
-    labels:
-      kompose.image-pull-policy: "IfNotPresent"
     environment:
       POSTGRES_USER: ${DAGSTER_POSTGRES_USER:-dagster_pg_user}
       POSTGRES_PASSWORD: ${DAGSTER_POSTGRES_PASSWORD:-supersecret}
@@ -153,8 +145,6 @@ services:
   dagster-user-code:
     container_name: daas-dagster-user-code
     image: daas/dagster-user-code:latest
-    labels:
-      kompose.image-pull-policy: "IfNotPresent"
     build:
       context: .
       dockerfile: Dockerfile.dagsterusercode
@@ -187,15 +177,11 @@ services:
   dagster-webserver:
     container_name: daas-dagster-webserver
     image: daas/dagster-webserver:latest
-    labels:
-      kompose.image-pull-policy: "IfNotPresent"
     build:
       context: .
       dockerfile: Dockerfile.dagster
     ports:
       - "${DAGSTER_WEB_PORT:-3000}:3000"
-    expose:
-      - "3000"
     environment:
       DAGSTER_POSTGRES_USER: "${DAGSTER_POSTGRES_USER:-dagster_pg_user}"
       DAGSTER_POSTGRES_PASSWORD: "${DAGSTER_POSTGRES_PASSWORD:-supersecret}"
@@ -217,8 +203,6 @@ services:
   dagster-daemon:
     container_name: daas-dagster-daemon
     image: daas/dagster-daemon:latest
-    labels:
-      kompose.image-pull-policy: "IfNotPresent"
     build:
       context: .
       dockerfile: Dockerfile.dagster
