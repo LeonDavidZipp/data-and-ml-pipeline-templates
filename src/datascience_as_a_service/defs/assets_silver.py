@@ -6,10 +6,9 @@ Each asset reads one or more bronze Delta tables, applies business logic
 
 import dagster as dg
 import polars as pl
-from deltalake import DeltaTable  # type: ignore
-from deltalake.exceptions import TableNotFoundError
 
 from datascience_as_a_service.defs.resources import S3Resource
+from datascience_as_a_service.utils import upsert_deltatable
 
 
 @dg.asset(
@@ -38,29 +37,14 @@ def assets_silver(
 
     context.log.info(f"Silver: {df.height:,} rows after transform → {target_uri}")
 
-    arrow_data = df.to_arrow()  # type: ignore
-    try:
-        (
-            DeltaTable(target_uri, storage_options=opts)
-            .merge(
-                arrow_data,  # type: ignore
-                predicate="t.placeholder = s.placeholder",
-                target_alias="t",
-                source_alias="s",
-            )
-            .when_matched_update_all()
-            .when_not_matched_insert_all()
-            .execute()
-        )
-    except TableNotFoundError:
-        df.write_delta(  # type: ignore
-            target_uri,
-            mode="error",
-            storage_options=opts,
-        )
-    except Exception as e:
-        raise e
-
+    upsert_deltatable(
+        target_uri,
+        df,
+        opts,
+        predicate="t.id = s.id",
+        target_alias="t",
+        source_alias="s",
+    )
     return dg.MaterializeResult(
         value=None, metadata={"row_count": dg.MetadataValue.int(df.height)}
     )

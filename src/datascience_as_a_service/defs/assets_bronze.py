@@ -22,8 +22,6 @@ from typing import IO, cast
 import dagster as dg
 import duckdb
 import polars as pl
-from deltalake import DeltaTable  # type: ignore
-from deltalake.exceptions import TableNotFoundError
 
 from datascience_as_a_service.defs.resources import (
     DuckDBResource,
@@ -31,6 +29,7 @@ from datascience_as_a_service.defs.resources import (
     PostgresResource,
     S3Resource,
 )
+from datascience_as_a_service.utils import upsert_deltatable
 
 # ---------------------------------------------------------------------------
 # PostgreSQL
@@ -57,30 +56,11 @@ def ingest_postgres(
         f"Loaded {df.height:,} rows from PostgreSQL → {target_bucket}/{target_table}"
     )
 
-    arrow_data = df.to_arrow()  # type: ignore
     opts = s3.delta_storage_options
     uri = f"s3://{target_bucket}/{target_table}"
-    try:
-        (
-            DeltaTable(uri, storage_options=opts)
-            .merge(
-                arrow_data,  # type: ignore
-                predicate="t.placeholder = s.placeholder",
-                target_alias="t",
-                source_alias="s",
-            )
-            .when_matched_update_all()
-            .when_not_matched_insert_all()
-            .execute()
-        )
-    except TableNotFoundError:
-        df.write_delta(  # type: ignore
-            uri,
-            mode="error",
-            storage_options=opts,
-        )
-    except Exception as e:
-        raise e
+    upsert_deltatable(
+        uri, df, opts, predicate="t.id = s.id", target_alias="t", source_alias="s"
+    )
     return dg.MaterializeResult(
         value=None, metadata={"row_count": dg.MetadataValue.int(df.height)}
     )
@@ -95,6 +75,7 @@ def ingest_postgres(
 def ingest_duckdb(
     context: dg.AssetExecutionContext,
     duckdb_source: DuckDBResource,
+    s3: S3Resource,
 ) -> dg.MaterializeResult[None]:
     target_bucket = "bronze"
     target_table = "duckdb_table"
@@ -106,7 +87,11 @@ def ingest_duckdb(
         f"Loaded {df.height:,} rows from DuckDB → {target_bucket}/{target_table}"
     )
 
-    # TODO: write df to Delta at s3://{target_bucket}/{target_table}
+    uri = f"s3://{target_bucket}/{target_table}"
+    opts = s3.delta_storage_options
+    upsert_deltatable(
+        uri, df, opts, predicate="t.id = s.id", target_alias="t", source_alias="s"
+    )
     return dg.MaterializeResult(
         value=None, metadata={"row_count": dg.MetadataValue.int(df.height)}
     )
@@ -121,6 +106,7 @@ def ingest_duckdb(
 def ingest_http(
     context: dg.AssetExecutionContext,
     http: HttpResource,
+    s3: S3Resource,
 ) -> dg.MaterializeResult[None]:
     target_bucket = "bronze"
     target_table = "http_table"
@@ -132,6 +118,11 @@ def ingest_http(
         f"Loaded {df.height:,} rows from HTTP → {target_bucket}/{target_table}"
     )
 
+    uri = f"s3://{target_bucket}/{target_table}"
+    opts = s3.delta_storage_options
+    upsert_deltatable(
+        uri, df, opts, predicate="t.id = s.id", target_alias="t", source_alias="s"
+    )
     return dg.MaterializeResult(
         value=None, metadata={"row_count": dg.MetadataValue.int(df.height)}
     )
@@ -159,7 +150,11 @@ def ingest_csv(
         f"Loaded {df.height:,} rows from CSV → {target_bucket}/{target_table}"
     )
 
-    # TODO: write df to Delta at s3://{target_bucket}/{target_table}
+    uri = f"s3://{target_bucket}/{target_table}"
+    opts = s3.delta_storage_options
+    upsert_deltatable(
+        uri, df, opts, predicate="t.id = s.id", target_alias="t", source_alias="s"
+    )
     return dg.MaterializeResult(
         value=None, metadata={"row_count": dg.MetadataValue.int(df.height)}
     )
@@ -187,7 +182,11 @@ def ingest_parquet(
         f"Loaded {df.height:,} rows from Parquet → {target_bucket}/{target_table}"
     )
 
-    # TODO: write df to Delta at s3://{target_bucket}/{target_table}
+    uri = f"s3://{target_bucket}/{target_table}"
+    opts = s3.delta_storage_options
+    upsert_deltatable(
+        uri, df, opts, predicate="t.id = s.id", target_alias="t", source_alias="s"
+    )
     return dg.MaterializeResult(
         value=None, metadata={"row_count": dg.MetadataValue.int(df.height)}
     )
@@ -216,7 +215,11 @@ def ingest_xlsx(
         f"Loaded {df.height:,} rows from XLSX → {target_bucket}/{target_table}"
     )
 
-    # TODO: write df to Delta at s3://{target_bucket}/{target_table}
+    uri = f"s3://{target_bucket}/{target_table}"
+    opts = s3.delta_storage_options
+    upsert_deltatable(
+        uri, df, opts, predicate="t.id = s.id", target_alias="t", source_alias="s"
+    )
     return dg.MaterializeResult(
         value=None, metadata={"row_count": dg.MetadataValue.int(df.height)}
     )
@@ -244,7 +247,11 @@ def ingest_json(
         f"Loaded {df.height:,} rows from JSON → {target_bucket}/{target_table}"
     )
 
-    # TODO: write df to Delta at s3://{target_bucket}/{target_table}
+    uri = f"s3://{target_bucket}/{target_table}"
+    opts = s3.delta_storage_options
+    upsert_deltatable(
+        uri, df, opts, predicate="t.id = s.id", target_alias="t", source_alias="s"
+    )
     return dg.MaterializeResult(
         value=None, metadata={"row_count": dg.MetadataValue.int(df.height)}
     )
@@ -267,7 +274,11 @@ def ingest_ndjson(
         f"Loaded {df.height:,} rows from NDJSON → {target_bucket}/{target_table}"
     )
 
-    # TODO: write df to Delta at s3://{target_bucket}/{target_table}
+    uri = f"s3://{target_bucket}/{target_table}"
+    opts = s3.delta_storage_options
+    upsert_deltatable(
+        uri, df, opts, predicate="t.id = s.id", target_alias="t", source_alias="s"
+    )
     return dg.MaterializeResult(
         value=None, metadata={"row_count": dg.MetadataValue.int(df.height)}
     )
