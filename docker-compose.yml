@@ -35,7 +35,7 @@ services:
       MLFLOW_S3_IGNORE_TLS: "${MLFLOW_S3_IGNORE_TLS:-true}"
       AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID:-dp_minio_user}"
       AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY:-supersecret}"
-      MLFLOW_BACKEND_STORE_URI: "postgresql+psycopg2://${POSTGRES_USER_MLFLOW:-mlflow_pg_user}:${POSTGRES_PASSWORD_MLFLOW:-supersecret}@postgres-mlflow/${POSTGRES_DB_MLFLOW:-mlflow_db}"
+      MLFLOW_BACKEND_STORE_URI: "postgresql+psycopg2://${MLFLOW_POSTGRES_USER:-mlflow_pg_user}:${MLFLOW_POSTGRES_PASSWORD:-supersecret}@postgres-mlflow/${MLFLOW_POSTGRES_DB:-mlflow_db}"
       MLFLOW_DEFAULT_ARTIFACT_ROOT: "${MLFLOW_DEFAULT_ARTIFACT_ROOT:-s3://mlflow/}"
       MLFLOW_ARTIFACTS_DESTINATION: "${MLFLOW_ARTIFACTS_DESTINATION:-s3://mlflow/}"
     depends_on:
@@ -116,9 +116,9 @@ services:
       context: .
       dockerfile: Dockerfile.postgres
     environment:
-      POSTGRES_USER: ${POSTGRES_USER_MLFLOW:-mlflow_pg_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD_MLFLOW:-supersecret}
-      POSTGRES_DB: ${POSTGRES_DB_MLFLOW:-mlflow_db}
+      POSTGRES_USER: ${MLFLOW_POSTGRES_USER:-mlflow_pg_user}
+      POSTGRES_PASSWORD: ${MLFLOW_POSTGRES_PASSWORD:-supersecret}
+      POSTGRES_DB: ${MLFLOW_POSTGRES_DB:-mlflow_db}
     expose:
       - "5432"
     volumes:
