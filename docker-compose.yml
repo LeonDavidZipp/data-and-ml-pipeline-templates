@@ -1,13 +1,32 @@
 services:
+  # nginx:
+  #   container_name: daas-nginx
+  #   image: nginx:alpine
+  #   labels:
+  #     kompose.service.type: "loadbalancer"
+  #   ports:
+  #     - "${NGINX_PORT:-80}:80"
+  #   volumes:
+  #     - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+  #   depends_on:
+  #     dagster-webserver:
+  #       condition: service_started
+  #     mlflow:
+  #       condition: service_healthy
+  #   restart: unless-stopped
+  #   networks:
+  #     - dagster_network
+
   mlflow:
     container_name: daas-mlflow
     image: daas/mlflow:latest
     labels:
       kompose.image-pull-policy: "IfNotPresent"
-      kompose.service.type: "nodeport"
     build:
       context: .
       dockerfile: Dockerfile.mlflow
+    expose:
+      - "5000"
     ports:
       - "${MLFLOW_PORT:-5001}:5000"
     environment:
@@ -19,7 +38,6 @@ services:
       MLFLOW_BACKEND_STORE_URI: "postgresql+psycopg2://${POSTGRES_USER_MLFLOW:-mlflow_pg_user}:${POSTGRES_PASSWORD_MLFLOW:-supersecret}@postgres-mlflow/${POSTGRES_DB_MLFLOW:-mlflow_db}"
       MLFLOW_DEFAULT_ARTIFACT_ROOT: "${MLFLOW_DEFAULT_ARTIFACT_ROOT:-s3://mlflow/}"
       MLFLOW_ARTIFACTS_DESTINATION: "${MLFLOW_ARTIFACTS_DESTINATION:-s3://mlflow/}"
-    entrypoint: mlflow server -h 0.0.0.0
     depends_on:
       createbuckets:
         condition: service_completed_successfully
@@ -101,8 +119,8 @@ services:
       POSTGRES_USER: ${POSTGRES_USER_MLFLOW:-mlflow_pg_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD_MLFLOW:-supersecret}
       POSTGRES_DB: ${POSTGRES_DB_MLFLOW:-mlflow_db}
-    ports:
-      - "5432:5432"
+    expose:
+      - "5432"
     volumes:
       - pgdata_mlflow:/var/lib/postgresql
     healthcheck:
@@ -127,8 +145,8 @@ services:
       POSTGRES_USER: ${DAGSTER_POSTGRES_USER:-dagster_pg_user}
       POSTGRES_PASSWORD: ${DAGSTER_POSTGRES_PASSWORD:-supersecret}
       POSTGRES_DB: ${DAGSTER_POSTGRES_DB:-dagster_db}
-    ports:
-      - "5433:5432"
+    expose:
+      - "5432"
     volumes:
       - pgdata_dagster:/var/lib/postgresql
     healthcheck:
@@ -159,6 +177,8 @@ services:
       context: .
       dockerfile: Dockerfile.dagsterusercode
     restart: always
+    expose:
+      - "4000"
     environment:
       DAGSTER_POSTGRES_USER: "${DAGSTER_POSTGRES_USER:-dagster_pg_user}"
       DAGSTER_POSTGRES_PASSWORD: "${DAGSTER_POSTGRES_PASSWORD:-supersecret}"
@@ -187,12 +207,13 @@ services:
     image: daas/dagster-webserver:latest
     labels:
       kompose.image-pull-policy: "IfNotPresent"
-      kompose.service.type: "nodeport"
     build:
       context: .
       dockerfile: Dockerfile.dagster
     ports:
-      - "3000:3000"
+      - "${DAGSTER_WEB_PORT:-3000}:3000"
+    expose:
+      - "3000"
     environment:
       DAGSTER_POSTGRES_USER: "${DAGSTER_POSTGRES_USER:-dagster_pg_user}"
       DAGSTER_POSTGRES_PASSWORD: "${DAGSTER_POSTGRES_PASSWORD:-supersecret}"
