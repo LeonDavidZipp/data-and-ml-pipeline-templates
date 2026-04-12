@@ -2,6 +2,8 @@
 
 > **Note:** This project is not yet tested. Tests will be added incrementally.
 
+> **This is a template.** Assets, resources, checks, and schedules are provided as starting points. Rename, adjust, or delete anything that doesn't fit your use case.
+
 An end-to-end data science platform built on **Dagster**, following a **medallion architecture** (bronze → silver → gold) with Delta Lake storage on S3/MinIO, ML training via any ML framework + Optuna, and experiment tracking with MLflow.
 
 ---
