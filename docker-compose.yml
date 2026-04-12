@@ -162,6 +162,8 @@ services:
       AWS_REGION: "${AWS_REGION:-us-east-1}"
       MLFLOW_TRACKING_URI: "${MLFLOW_URL:-http://mlflow:5000}"
       HTTP_API_TOKEN: "${HTTP_API_TOKEN:-}"
+    volumes:
+      - ./src:/opt/dagster/app/src
     healthcheck:
       test: ["CMD", "dagster", "api", "grpc-health-check", "-p", "4000"]
       interval: 3s
