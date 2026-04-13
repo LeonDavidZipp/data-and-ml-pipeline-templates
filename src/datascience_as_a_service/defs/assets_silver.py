@@ -28,23 +28,50 @@ def assets_silver(
     opts = s3.delta_storage_options
     source_uri = f"s3://{source_bucket}/{source_table}"
     target_uri = f"s3://{target_bucket}/{target_table}"
+    quarantine_uri = f"s3://{target_bucket}/quarantine/{target_table}"
 
-    df = (
-        pl.scan_delta(source_uri, storage_options=opts)
-        # TODO: add transformations here
-        .collect()
+    lf = pl.scan_delta(source_uri, storage_options=opts)
+
+    lf_target = (
+        lf
+        # TODO: apply transformations
     )
 
-    context.log.info(f"Silver: {df.height:,} rows after transform → {target_uri}")
+    lf_quarantine = lf.join(lf_target, how="anti", on=["changeme"])
 
+    df_target = lf_target.collect()
+    df_quarantine = lf_quarantine.collect()
+
+    context.log.info(
+        f"Silver: {df_target.height:,} rows after transform → {target_uri}"
+    )
+    context.log.info(
+        f"Silver: {df_quarantine.height:,} rows quarantined → {quarantine_uri}"
+    )
+
+    predicate = "t.changeme = s.changeme"
+    target_alias = "t"
+    source_alias = "s"
     upsert_deltatable(
         target_uri,
-        df,
+        df_target,
         opts,
-        predicate="t.id = s.id",
-        target_alias="t",
-        source_alias="s",
+        predicate=predicate,
+        target_alias=target_alias,
+        source_alias=source_alias,
+    )
+    upsert_deltatable(
+        quarantine_uri,
+        df_quarantine,
+        opts,
+        predicate=predicate,
+        target_alias=target_alias,
+        source_alias=source_alias,
     )
     return dg.MaterializeResult(
-        value=None, metadata={"row_count": dg.MetadataValue.int(df.height)}
+        value=None,
+        metadata={
+            "row_count": dg.MetadataValue.int(df_target.height),
+            "quarantined_row_count": dg.MetadataValue.int(df_quarantine.height),
+        },
     )
