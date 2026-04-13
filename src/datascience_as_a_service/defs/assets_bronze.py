@@ -16,9 +16,6 @@ Additional packages required per asset (install with ``uv add <pkg>``):
     json      → polars
 """
 
-from io import IOBase
-from typing import IO, cast
-
 import dagster as dg
 import duckdb
 import polars as pl
@@ -144,7 +141,7 @@ def ingest_csv(
 
     fs = s3.get_filesystem()
     with fs.open(source_key, mode="rb") as f:  # type: ignore[reportUnknownMemberType]
-        df = pl.read_csv(cast(IO[bytes], f))
+        df = pl.read_csv(f.read())
 
     context.log.info(
         f"Loaded {df.height:,} rows from CSV → {target_bucket}/{target_table}"
@@ -176,7 +173,7 @@ def ingest_parquet(
 
     fs = s3.get_filesystem()
     with fs.open(source_key, mode="rb") as f:  # type: ignore[reportUnknownMemberType]
-        df = pl.read_parquet(cast(IO[bytes], f))
+        df = pl.read_parquet(f.read())
 
     context.log.info(
         f"Loaded {df.height:,} rows from Parquet → {target_bucket}/{target_table}"
@@ -209,7 +206,7 @@ def ingest_xlsx(
 
     fs = s3.get_filesystem()
     with fs.open(source_key, mode="rb") as f:  # type: ignore[reportUnknownMemberType]
-        df = pl.read_excel(cast(IO[bytes], f), sheet_name=sheet_name)
+        df = pl.read_excel(f.read(), sheet_name=sheet_name)
 
     context.log.info(
         f"Loaded {df.height:,} rows from XLSX → {target_bucket}/{target_table}"
@@ -241,7 +238,7 @@ def ingest_json(
 
     fs = s3.get_filesystem()
     with fs.open(source_key, mode="rb") as f:  # type: ignore[reportUnknownMemberType]
-        df = pl.read_json(cast(IOBase, f))
+        df = pl.read_json(f.read())
 
     context.log.info(
         f"Loaded {df.height:,} rows from JSON → {target_bucket}/{target_table}"
@@ -268,7 +265,7 @@ def ingest_ndjson(
 
     fs = s3.get_filesystem()
     with fs.open(source_key, mode="rb") as f:  # type: ignore[reportUnknownMemberType]
-        df = pl.read_ndjson(cast(IO[bytes], f))
+        df = pl.read_ndjson(f.read())
 
     context.log.info(
         f"Loaded {df.height:,} rows from NDJSON → {target_bucket}/{target_table}"
