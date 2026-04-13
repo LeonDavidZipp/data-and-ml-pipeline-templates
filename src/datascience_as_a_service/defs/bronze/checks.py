@@ -1,0 +1,11 @@
+import dagster as dg
+
+
+@dg.asset_check(asset="ingest_postgres")
+def check_bronze_asset(
+    context: dg.AssetCheckExecutionContext,
+) -> dg.AssetCheckResult:
+    return dg.AssetCheckResult(
+        passed=False,
+        metadata={"reason": dg.MetadataValue.text("Not implemented yet")},
+    )
