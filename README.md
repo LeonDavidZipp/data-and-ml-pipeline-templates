@@ -21,6 +21,47 @@ Each layer reads from and writes to **Delta Lake tables** on S3 (MinIO) using UP
 
 ---
 
+## Project Structure
+
+```
+src/datascience_as_a_service/
+├── definitions.py          # Dagster entry point (auto-discovers defs/)
+└── defs/
+│   ├── bronze/
+│   │   ├── assets.py        # Bronze asset definitions (data ingestion)
+│   │   ├── checks.py        # Checks for bronze assets (e.g. row counts)
+│   │   ├── schedules.py     # Schedules for bronze assets
+│   │   └── sensors.py       # Sensors for bronze assets (e.g. file watchers)
+│   ├── silver/
+│   │   ├── assets.py        # Silver asset definitions (data cleaning, joins)
+│   │   ├── checks.py        # Checks for silver assets (e.g. null counts)
+│   │   ├── schedules.py     # Schedules for silver assets
+│   │   └── sensors.py       # Sensors for silver assets
+│   ├── gold/
+│   │   ├── assets.py        # Gold asset definitions (aggregations, features)
+│   │   ├── checks.py        # Checks for gold assets (e.g. value ranges)
+│   │   ├── schedules.py     # Schedules for gold assets
+│   │   └── sensors.py       # Sensors for gold assets
+│   ├── mlflow/
+│   │   ├── assets.py        # ML assets (model training, evaluation)
+│   │   ├── checks.py        # Checks for ML assets (e.g. model performance)
+│   │   ├── schedules.py     # Schedules for ML assets
+│   │   └── sensors.py       # Sensors for ML assets (e.g. new data triggers)
+│   └── resources.py         # Resource definitions (e.g. Postgres, S3, MLflow)
+├── transformations/         # Reusable transformation functions (e.g. data cleaning, feature engineering)
+│   ├── bronze.py            # Transformations for bronze layer
+│   ├── silver.py            # Transformations for silver layer
+│   └── gold.py              # Transformations for gold layer
+├── definitions.py           # Dagster entry point (auto-discovers defs/)
+└── utils.py                 # Utility functions (e.g. Delta Lake upsert helper)
+```
+
+To add a new asset, create or extend a file in `defs/`. Dagster auto-discovers everything via `load_from_defs_folder()`.
+
+> **Dev tip:** The `dagster-user-code` container mounts `./src` as a volume, so code changes are reflected without rebuilding.
+
+---
+
 ## Infrastructure (Docker Compose)
 
 | Service               | Port        | Description                                                                 |
@@ -146,27 +187,6 @@ dg dev
 ```
 
 Open http://localhost:3000 in your browser.
-
----
-
-## Project Structure
-
-```
-src/datascience_as_a_service/
-├── definitions.py          # Dagster entry point (auto-discovers defs/)
-└── defs/
-    ├── assets_bronze.py    # Bronze layer – ingest from sources into Delta
-    ├── assets_silver.py    # Silver layer – cleanse & enrich
-    ├── assets_gold.py      # Gold layer – feature engineering
-    ├── assets_mlflow.py    # ML training & experiment tracking
-    ├── checks.py           # Asset checks (row counts, model improvement)
-    ├── resources.py        # Postgres, DuckDB, HTTP, S3, MLflow resources
-    └── schedules.py        # Schedules & sensors
-```
-
-To add a new asset, create or extend a file in `defs/`. Dagster auto-discovers everything via `load_from_defs_folder()`.
-
-> **Dev tip:** The `dagster-user-code` container mounts `./src` as a volume, so code changes are reflected without rebuilding.
 
 ---
 
