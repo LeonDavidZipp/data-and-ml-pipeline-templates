@@ -142,7 +142,7 @@ All secrets are injected via `dg.EnvVar` — no plaintext credentials.
 ## Schedules &amp; Sensors
 
 - **`daily_ingest_schedule`** — cron `0 0 * * *`, targets all assets
-- **`bronze_sensor`** — sensor-based trigger, targets all assets
+- **`new_object_sensor`** — polls `s3://raw` every 60s; when a new object appears, triggers the matching `ingest_*` asset by extension (csv/parquet/xlsx/json/ndjson), passing the object's own key through as run config (each asset takes a `config: <Format>IngestConfig` with `source_bucket`/`source_key` — the asset actually reads the file that was dropped, not a placeholder). Tracks progress via the sensor cursor (max `LastModified` seen) — the first tick only seeds a baseline, it never backfills objects that predate the sensor.
 - **`alert_on_run_failure`** — run-failure sensor, posts to `alerts` (`ALERT_WEBHOOK_URL`) whenever any run in the deployment fails. Disabled (default `STOPPED`) until turned on in the Dagster UI or via `default_status`.
 
 ---
