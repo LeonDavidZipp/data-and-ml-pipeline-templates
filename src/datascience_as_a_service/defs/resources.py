@@ -7,20 +7,18 @@ import s3fs  # type: ignore
 from dagster_mlflow import mlflow_tracking  # type: ignore[reportUnknownVariableType]
 
 # ---------------------------------------------------------------------------
-# PostgreSQL
+# SQL (dialect-agnostic)
 # ---------------------------------------------------------------------------
 
 
-class PostgresResource(dg.ConfigurableResource[Any]):
-    host: str = "postgres"
-    port: int = 5432
-    dbname: str = dg.EnvVar("DAGSTER_POSTGRES_DB")
-    user: str = dg.EnvVar("DAGSTER_POSTGRES_USER")
-    password: str = dg.EnvVar("DAGSTER_POSTGRES_PASSWORD")
+class SqlResource(dg.ConfigurableResource[Any]):
+    """Generic SQL data source, configured by connection string.
 
-    @property
-    def connection_uri(self) -> str:
-        return f"postgresql://{self.user}:{self.password}@{self.host}:{self.port}/{self.dbname}"
+    Dialect-agnostic: the scheme of ``connection_uri`` (e.g. ``postgresql://``,
+    ``mysql://``, ``mssql://``) determines what it connects to.
+    """
+
+    connection_uri: str = dg.EnvVar("SQL_SOURCE_CONNECTION_URI")
 
 
 # ---------------------------------------------------------------------------
@@ -98,7 +96,7 @@ class S3Resource(dg.ConfigurableResource[Any]):
 def resources() -> dg.Definitions:
     return dg.Definitions(
         resources={
-            "postgres": PostgresResource(),
+            "sql": SqlResource(),
             "duckdb_source": DuckDBResource(),
             "http": HttpResource(),
             "s3": S3Resource(),

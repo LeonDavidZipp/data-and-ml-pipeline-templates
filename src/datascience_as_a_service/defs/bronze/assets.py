@@ -7,7 +7,8 @@ Delta table.  Two variables are defined at the top of every asset body:
     target_table  : str  – table name used as the S3 key prefix / table path
 
 Additional packages required per asset (install with ``uv add <pkg>``):
-    postgres  → psycopg2-binary, polars, connectorx
+    sql       → polars, connectorx (plus a DB-API driver for your dialect,
+                e.g. psycopg2-binary for postgresql://, pymysql for mysql://)
     duckdb    → duckdb  (already in deps), polars
     http      → httpx, polars
     csv       → polars
@@ -23,34 +24,34 @@ import polars as pl
 from datascience_as_a_service.defs.resources import (
     DuckDBResource,
     HttpResource,
-    PostgresResource,
     S3Resource,
+    SqlResource,
 )
 from datascience_as_a_service.utils import upsert_deltatable
 
 # ---------------------------------------------------------------------------
-# PostgreSQL
+# SQL (dialect-agnostic — driven by SqlResource.connection_uri)
 # ---------------------------------------------------------------------------
 
 
 @dg.asset(group_name="bronze")
-def ingest_postgres(
+def ingest_sql(
     context: dg.AssetExecutionContext,
-    postgres: PostgresResource,
+    sql: SqlResource,
     s3: S3Resource,
 ) -> dg.MaterializeResult[None]:
     source_key = "changeme"
     target_bucket = "bronze"
-    target_table = "postgres_table"
+    target_table = "sql_table"
 
     df = pl.read_database_uri(
         f"SELECT * FROM {source_key} LIMIT 100000",
-        postgres.connection_uri,
+        sql.connection_uri,
         engine="connectorx",
     )
 
     context.log.info(
-        f"Loaded {df.height:,} rows from PostgreSQL → {target_bucket}/{target_table}"
+        f"Loaded {df.height:,} rows from SQL → {target_bucket}/{target_table}"
     )
 
     opts = s3.delta_storage_options

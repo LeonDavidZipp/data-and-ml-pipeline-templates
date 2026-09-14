@@ -1,7 +1,7 @@
 import dagster as dg
 
 
-@dg.asset_check(asset="ingest_postgres")
+@dg.asset_check(asset="ingest_sql")
 def check_bronze_asset(
     context: dg.AssetCheckExecutionContext,
 ) -> dg.AssetCheckResult:

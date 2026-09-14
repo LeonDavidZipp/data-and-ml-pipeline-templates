@@ -5,19 +5,15 @@ import pytest
 from src.datascience_as_a_service.defs.resources import (
     DuckDBResource,
     HttpResource,
-    PostgresResource,
     S3Resource,
+    SqlResource,
 )
 
 
 @pytest.fixture
-def mock_postgres_resource() -> PostgresResource:
-    return PostgresResource(
-        host="localhost",
-        port=5432,
-        dbname="testdb",
-        user="testuser",
-        password="testpass",
+def mock_sql_resource() -> SqlResource:
+    return SqlResource(
+        connection_uri="postgresql://testuser:testpass@localhost:5432/testdb",
     )
 
 

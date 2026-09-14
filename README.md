@@ -99,7 +99,7 @@ All ports and credentials can be overridden with environment variables — see `
 
 | Asset             | Source          | Method                      |
 | ----------------- | --------------- | --------------------------- |
-| `ingest_postgres` | PostgreSQL      | connectorx → Delta (UPSERT) |
+| `ingest_sql`      | SQL (any dialect via connection string) | connectorx → Delta (UPSERT) |
 | `ingest_duckdb`   | DuckDB          | duckdb → Delta              |
 | `ingest_http`     | REST API        | httpx → Delta               |
 | `ingest_csv`      | S3 CSV file     | s3fs → Polars               |
@@ -123,7 +123,7 @@ All ports and credentials can be overridden with environment variables — see `
 
 | Key             | Class              | Description                                                  |
 | --------------- | ------------------ | ------------------------------------------------------------ |
-| `postgres`      | `PostgresResource` | PostgreSQL connection                                        |
+| `sql`           | `SqlResource`      | Dialect-agnostic SQL connection (via connection string)      |
 | `duckdb_source` | `DuckDBResource`   | DuckDB file connector                                        |
 | `http`          | `HttpResource`     | HTTP API client with token auth                              |
 | `s3`            | `S3Resource`       | S3/RustFS access (Delta storage options + `s3fs` filesystem) |
