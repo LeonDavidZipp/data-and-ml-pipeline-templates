@@ -1,6 +1,67 @@
+import logging
+import random
+import time
+from collections.abc import Callable
+from functools import wraps
+from typing import ParamSpec, TypeVar
+
 import polars as pl
 from deltalake import DeltaTable
 from deltalake.exceptions import TableNotFoundError
+
+P = ParamSpec("P")
+T = TypeVar("T")
+
+logger = logging.getLogger(__name__)
+
+
+def retry(
+    exceptions: tuple[type[BaseException], ...] = (Exception,),
+    max_attempts: int = 3,
+    base_delay: float = 1.0,
+    max_delay: float = 30.0,
+) -> Callable[[Callable[P, T]], Callable[P, T]]:
+    """
+    Decorator that retries a function with exponential backoff and jitter.
+
+    Only retries the exception types listed in `exceptions`; anything else
+    propagates immediately. Re-raises the last exception once `max_attempts`
+    is exhausted.
+
+    Args:
+        exceptions: exception types that should trigger a retry.
+        max_attempts: total number of attempts, including the first.
+        base_delay: seconds to wait after the first failure; doubles each
+            subsequent attempt.
+        max_delay: upper bound on the backoff delay.
+    """
+
+    def decorator(fn: Callable[P, T]) -> Callable[P, T]:
+        @wraps(fn)
+        def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
+            attempt = 0
+            while True:
+                try:
+                    return fn(*args, **kwargs)
+                except exceptions as exc:
+                    attempt += 1
+                    if attempt >= max_attempts:
+                        raise
+                    delay = min(base_delay * 2 ** (attempt - 1), max_delay)
+                    delay += random.uniform(0, delay * 0.1)
+                    logger.warning(
+                        "%s failed (attempt %d/%d): %s — retrying in %.1fs",
+                        fn.__qualname__,
+                        attempt,
+                        max_attempts,
+                        exc,
+                        delay,
+                    )
+                    time.sleep(delay)
+
+        return wrapper
+
+    return decorator
 
 
 def upsert_deltatable(
