@@ -41,7 +41,7 @@ from datascience_as_a_service.utils import upsert_deltatable
 def _get_s3_bytes(s3: S3Resource, bucket: str, key: str) -> bytes:
     import boto3
 
-    client = boto3.client(
+    client = boto3.client(  # type: ignore
         "s3",
         endpoint_url=s3.endpoint_url,
         aws_access_key_id=s3.access_key,
