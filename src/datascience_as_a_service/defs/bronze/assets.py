@@ -153,20 +153,22 @@ def ingest_http(
 # ---------------------------------------------------------------------------
 
 
+class CsvIngestConfig(dg.Config):
+    source_bucket: str = "raw"
+    source_key: str = "changeme.csv"
+
+
 @dg.asset(group_name="bronze")
 def ingest_csv(
     context: dg.AssetExecutionContext,
+    config: CsvIngestConfig,
     s3: S3Resource,
 ) -> dg.MaterializeResult[None]:
-    source_bucket = "raw"
-    source_key = "changeme.csv"
     target_bucket = "bronze"
     target_table = "csv_table"
 
     opts = s3.delta_storage_options
-    source_uri = f"s3://{source_bucket}/{source_key}"
-    # eager `read_csv` requires an fsspec backend (s3fs); `scan_csv` reads
-    # straight from the object store in Rust, so no filesystem client is needed
+    source_uri = f"s3://{config.source_bucket}/{config.source_key}"
     df = pl.scan_csv(source_uri, storage_options=opts).collect()
 
     context.log.info(
@@ -187,18 +189,22 @@ def ingest_csv(
 # ---------------------------------------------------------------------------
 
 
+class ParquetIngestConfig(dg.Config):
+    source_bucket: str = "raw"
+    source_key: str = "changeme.parquet"
+
+
 @dg.asset(group_name="bronze")
 def ingest_parquet(
     context: dg.AssetExecutionContext,
+    config: ParquetIngestConfig,
     s3: S3Resource,
 ) -> dg.MaterializeResult[None]:
-    source_bucket = "raw"
-    source_key = "changeme.parquet"
     target_bucket = "bronze"
     target_table = "parquet_table"
 
     opts = s3.delta_storage_options
-    source_uri = f"s3://{source_bucket}/{source_key}"
+    source_uri = f"s3://{config.source_bucket}/{config.source_key}"
     df = pl.read_parquet(source_uri, storage_options=opts)
 
     context.log.info(
@@ -219,19 +225,23 @@ def ingest_parquet(
 # ---------------------------------------------------------------------------
 
 
+class XlsxIngestConfig(dg.Config):
+    source_bucket: str = "raw"
+    source_key: str = "changeme.xlsx"
+    sheet_name: str = "Sheet1"
+
+
 @dg.asset(group_name="bronze")
 def ingest_xlsx(
     context: dg.AssetExecutionContext,
+    config: XlsxIngestConfig,
     s3: S3Resource,
 ) -> dg.MaterializeResult[None]:
-    source_bucket = "raw"
-    source_key = "changeme.xlsx"
     target_bucket = "bronze"
     target_table = "xlsx_table"
-    sheet_name = "Sheet1"
 
-    data = _get_s3_bytes(s3, source_bucket, source_key)
-    df = pl.read_excel(data, sheet_name=sheet_name)
+    data = _get_s3_bytes(s3, config.source_bucket, config.source_key)
+    df = pl.read_excel(data, sheet_name=config.sheet_name)
 
     context.log.info(
         f"Loaded {df.height:,} rows from XLSX → {target_bucket}/{target_table}"
@@ -252,17 +262,21 @@ def ingest_xlsx(
 # ---------------------------------------------------------------------------
 
 
+class JsonIngestConfig(dg.Config):
+    source_bucket: str = "raw"
+    source_key: str = "changeme.json"
+
+
 @dg.asset(group_name="bronze")
 def ingest_json(
     context: dg.AssetExecutionContext,
+    config: JsonIngestConfig,
     s3: S3Resource,
 ) -> dg.MaterializeResult[None]:
-    source_bucket = "raw"
-    source_key = "changeme.json"
     target_bucket = "bronze"
     target_table = "json_table"
 
-    data = _get_s3_bytes(s3, source_bucket, source_key)
+    data = _get_s3_bytes(s3, config.source_bucket, config.source_key)
     df = pl.read_json(data)
 
     context.log.info(
@@ -279,18 +293,22 @@ def ingest_json(
     )
 
 
+class NdjsonIngestConfig(dg.Config):
+    source_bucket: str = "raw"
+    source_key: str = "changeme.json"  # or .ndjson or .jsonl
+
+
 @dg.asset(group_name="bronze")
 def ingest_ndjson(
     context: dg.AssetExecutionContext,
+    config: NdjsonIngestConfig,
     s3: S3Resource,
 ) -> dg.MaterializeResult[None]:
-    source_bucket = "raw"
-    source_key = "changeme.json"  # or .ndjson or .jsonl
     target_bucket = "bronze"
     target_table = "ndjson_table"
 
     opts = s3.delta_storage_options
-    source_uri = f"s3://{source_bucket}/{source_key}"
+    source_uri = f"s3://{config.source_bucket}/{config.source_key}"
     df = pl.read_ndjson(source_uri, storage_options=opts)
 
     context.log.info(

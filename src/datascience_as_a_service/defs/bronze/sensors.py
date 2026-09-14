@@ -90,6 +90,16 @@ def new_object_sensor(
             dg.RunRequest(
                 run_key=f"{WATCHED_BUCKET}/{key}",
                 asset_selection=[dg.AssetKey(asset_name)],
+                run_config=dg.RunConfig(
+                    ops={
+                        asset_name: {
+                            "config": {
+                                "source_bucket": WATCHED_BUCKET,
+                                "source_key": key,
+                            }
+                        }
+                    }
+                ),
                 tags={"source_key": key},
             )
         )
