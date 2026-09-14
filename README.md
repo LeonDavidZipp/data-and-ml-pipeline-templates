@@ -127,6 +127,7 @@ All ports and credentials can be overridden with environment variables — see `
 | `duckdb_source` | `DuckDBResource`   | DuckDB file connector                                        |
 | `http`          | `HttpResource`     | HTTP API client with token auth                              |
 | `s3`            | `S3Resource`       | S3/RustFS access (Delta storage options + `s3fs` filesystem) |
+| `alerts`        | `AlertResource`    | Webhook notifications (Slack-compatible), disabled if empty  |
 | `mlflow`        | `mlflow_tracking`  | MLflow tracking (dagster-mlflow)                             |
 
 All secrets are injected via `dg.EnvVar` — no plaintext credentials.
@@ -142,6 +143,7 @@ All secrets are injected via `dg.EnvVar` — no plaintext credentials.
 
 - **`daily_ingest_schedule`** — cron `0 0 * * *`, targets all assets
 - **`bronze_sensor`** — sensor-based trigger, targets all assets
+- **`alert_on_run_failure`** — run-failure sensor, posts to `alerts` (`ALERT_WEBHOOK_URL`) whenever any run in the deployment fails. Disabled (default `STOPPED`) until turned on in the Dagster UI or via `default_status`.
 
 ---
 

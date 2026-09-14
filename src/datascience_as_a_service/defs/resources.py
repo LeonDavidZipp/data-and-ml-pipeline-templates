@@ -3,8 +3,11 @@ from __future__ import annotations
 from typing import Any
 
 import dagster as dg
+import httpx
 import s3fs  # type: ignore
 from dagster_mlflow import mlflow_tracking  # type: ignore[reportUnknownVariableType]
+
+from datascience_as_a_service.utils import retry
 
 # ---------------------------------------------------------------------------
 # SQL (dialect-agnostic)
@@ -41,11 +44,10 @@ class HttpResource(dg.ConfigurableResource[Any]):
     token: str = dg.EnvVar("HTTP_API_TOKEN")
     timeout: int = 30
 
+    @retry(exceptions=(httpx.TransportError,))
     def get(
         self, path: str, params: dict[str, str] | None = None
     ) -> list[dict[str, Any]]:
-        import httpx
-
         headers: dict[str, str] = {"Authorization": f"Bearer {self.token}"}
         with httpx.Client(base_url=self.base_url, timeout=self.timeout) as client:
             response = client.get(path, params=params or {}, headers=headers)
@@ -88,6 +90,28 @@ class S3Resource(dg.ConfigurableResource[Any]):
 
 
 # ---------------------------------------------------------------------------
+# Alerting
+# ---------------------------------------------------------------------------
+
+
+class AlertResource(dg.ConfigurableResource[Any]):
+    """Posts a message to a webhook (Slack/Mattermost-compatible ``{"text": ...}``).
+
+    Leave ``webhook_url`` empty to disable alerting without changing call sites.
+    """
+
+    webhook_url: str = dg.EnvVar("ALERT_WEBHOOK_URL")
+    timeout: int = 10
+
+    @retry(exceptions=(httpx.TransportError,))
+    def notify(self, message: str) -> None:
+        if not self.webhook_url:
+            return
+
+        httpx.post(self.webhook_url, json={"text": message}, timeout=self.timeout)
+
+
+# ---------------------------------------------------------------------------
 # Register all resources so load_from_defs_folder auto-discovers them
 # ---------------------------------------------------------------------------
 
@@ -100,6 +124,7 @@ def resources() -> dg.Definitions:
             "duckdb_source": DuckDBResource(),
             "http": HttpResource(),
             "s3": S3Resource(),
+            "alerts": AlertResource(),
             "mlflow": mlflow_tracking,
         },
     )
