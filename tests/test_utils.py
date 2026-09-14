@@ -12,34 +12,44 @@ class TestUpsertDeltatable:
         self.opts = {"endpoint_url": "http://minio:9000"}
         self.uri = "s3://bucket/table"
 
-    @patch("src.datascience_as_a_service.utils.DeltaTable")
-    def test_merge_existing_table(self, mock_dt_cls: MagicMock) -> None:
-        mock_merge = MagicMock()
-        mock_dt_cls.return_value.merge.return_value = mock_merge
-        mock_merge.when_matched_update_all.return_value = mock_merge
-        mock_merge.when_not_matched_insert_all.return_value = mock_merge
+    @patch.object(pl.DataFrame, "write_delta")
+    def test_merge_existing_table(self, mock_write_delta: MagicMock) -> None:
+        mock_merger = MagicMock()
+        mock_write_delta.return_value = mock_merger
+        mock_merger.when_matched_update_all.return_value = mock_merger
+        mock_merger.when_not_matched_insert_all.return_value = mock_merger
 
         upsert_deltatable(self.uri, self.df, self.opts, predicate="t.id = s.id")
 
-        mock_dt_cls.assert_called_once_with(self.uri, storage_options=self.opts)
-        mock_merge.execute.assert_called_once()
+        mock_write_delta.assert_called_once_with(
+            self.uri,
+            mode="merge",
+            storage_options=self.opts,
+            delta_merge_options={
+                "predicate": "t.id = s.id",
+                "source_alias": "s",
+                "target_alias": "t",
+            },
+        )
+        mock_merger.execute.assert_called_once()
 
-    @patch("src.datascience_as_a_service.utils.DeltaTable")
-    def test_creates_table_when_not_found(self, mock_dt_cls: MagicMock) -> None:
-        mock_dt_cls.side_effect = TableNotFoundError("not found")
+    @patch.object(pl.DataFrame, "write_delta")
+    def test_creates_table_when_not_found(self, mock_write_delta: MagicMock) -> None:
+        mock_write_delta.side_effect = [TableNotFoundError("not found"), None]
 
-        with patch.object(pl.DataFrame, "write_delta") as mock_write:
-            upsert_deltatable(self.uri, self.df, self.opts, predicate="t.id = s.id")
-            mock_write.assert_called_once_with(
-                self.uri, mode="error", storage_options=self.opts
-            )
+        upsert_deltatable(self.uri, self.df, self.opts, predicate="t.id = s.id")
 
-    @patch("src.datascience_as_a_service.utils.DeltaTable")
-    def test_custom_aliases(self, mock_dt_cls: MagicMock) -> None:
-        mock_merge = MagicMock()
-        mock_dt_cls.return_value.merge.return_value = mock_merge
-        mock_merge.when_matched_update_all.return_value = mock_merge
-        mock_merge.when_not_matched_insert_all.return_value = mock_merge
+        assert mock_write_delta.call_count == 2
+        mock_write_delta.assert_any_call(
+            self.uri, mode="error", storage_options=self.opts
+        )
+
+    @patch.object(pl.DataFrame, "write_delta")
+    def test_custom_aliases(self, mock_write_delta: MagicMock) -> None:
+        mock_merger = MagicMock()
+        mock_write_delta.return_value = mock_merger
+        mock_merger.when_matched_update_all.return_value = mock_merger
+        mock_merger.when_not_matched_insert_all.return_value = mock_merger
 
         upsert_deltatable(
             self.uri,
@@ -50,13 +60,14 @@ class TestUpsertDeltatable:
             source_alias="source",
         )
 
-        call_kwargs = mock_dt_cls.return_value.merge.call_args
-        assert call_kwargs.kwargs["target_alias"] == "target"
-        assert call_kwargs.kwargs["source_alias"] == "source"
+        call_kwargs = mock_write_delta.call_args
+        merge_opts = call_kwargs.kwargs["delta_merge_options"]
+        assert merge_opts["target_alias"] == "target"
+        assert merge_opts["source_alias"] == "source"
 
-    @patch("src.datascience_as_a_service.utils.DeltaTable")
-    def test_reraises_unexpected_errors(self, mock_dt_cls: MagicMock) -> None:
-        mock_dt_cls.side_effect = RuntimeError("unexpected")
+    @patch.object(pl.DataFrame, "write_delta")
+    def test_reraises_unexpected_errors(self, mock_write_delta: MagicMock) -> None:
+        mock_write_delta.side_effect = RuntimeError("unexpected")
 
         try:
             upsert_deltatable(self.uri, self.df, self.opts, predicate="t.id = s.id")

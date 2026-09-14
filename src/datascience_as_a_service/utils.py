@@ -6,7 +6,6 @@ from functools import wraps
 from typing import ParamSpec, TypeVar
 
 import polars as pl
-from deltalake import DeltaTable
 from deltalake.exceptions import TableNotFoundError
 
 P = ParamSpec("P")
@@ -85,25 +84,25 @@ def upsert_deltatable(
         target_alias (str): The alias for the target table in the merge operation.
         source_alias (str): The alias for the source DataFrame in the merge operation.
     """
-    arrow_data = df.to_arrow()  # type: ignore
     try:
         (
-            DeltaTable(table_uri, storage_options=storage_options)
-            .merge(
-                arrow_data,  # type: ignore
-                predicate=predicate,
-                target_alias=target_alias,
-                source_alias=source_alias,
+            df.write_delta(
+                table_uri,
+                mode="merge",
+                storage_options=storage_options,
+                delta_merge_options={
+                    "predicate": predicate,
+                    "source_alias": source_alias,
+                    "target_alias": target_alias,
+                },
             )
             .when_matched_update_all()
             .when_not_matched_insert_all()
             .execute()
         )
     except TableNotFoundError:
-        df.write_delta(  # type: ignore
+        df.write_delta(
             table_uri,
             mode="error",
             storage_options=storage_options,
         )
-    except Exception as e:
-        raise e
