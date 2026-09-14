@@ -11,10 +11,18 @@ Additional packages required per asset (install with ``uv add <pkg>``):
                 e.g. psycopg2-binary for postgresql://, pymysql for mysql://)
     duckdb    → duckdb  (already in deps), polars
     http      → httpx, polars
-    csv       → polars
-    parquet   → polars
-    xlsx      → polars, xlsx2csv
-    json      → polars
+    csv       → polars (native cloud read via `scan_csv`, no filesystem client)
+    parquet   → polars (native cloud read via `read_parquet`)
+    ndjson    → polars (native cloud read via `read_ndjson`)
+    json      → polars, boto3 (single JSON documents have no native cloud
+                reader in polars, so raw bytes are fetched via S3 API)
+    xlsx      → polars, xlsx2csv, boto3 (same reason as json)
+
+`S3Resource` only holds credentials/config — it doesn't wrap a specific
+client. Where polars can read straight from an `s3://` URI (csv/parquet/
+ndjson) we pass `s3.delta_storage_options` directly and skip a client
+entirely; where it can't (json/xlsx) `_get_s3_bytes()` below fetches the
+object via `boto3`. Swap either for whatever fits your source.
 """
 
 import dagster as dg
@@ -28,6 +36,20 @@ from datascience_as_a_service.defs.resources import (
     SqlResource,
 )
 from datascience_as_a_service.utils import upsert_deltatable
+
+
+def _get_s3_bytes(s3: S3Resource, bucket: str, key: str) -> bytes:
+    import boto3
+
+    client = boto3.client(
+        "s3",
+        endpoint_url=s3.endpoint_url,
+        aws_access_key_id=s3.access_key,
+        aws_secret_access_key=s3.secret_key,
+        region_name=s3.region,
+    )
+    return client.get_object(Bucket=bucket, Key=key)["Body"].read()
+
 
 # ---------------------------------------------------------------------------
 # SQL (dialect-agnostic — driven by SqlResource.connection_uri)
@@ -136,20 +158,22 @@ def ingest_csv(
     context: dg.AssetExecutionContext,
     s3: S3Resource,
 ) -> dg.MaterializeResult[None]:
+    source_bucket = "raw"
+    source_key = "changeme.csv"
     target_bucket = "bronze"
     target_table = "csv_table"
-    source_key = "raw/changeme.csv"
 
-    fs = s3.get_filesystem()
-    with fs.open(source_key, mode="rb") as f:  # type: ignore[reportUnknownMemberType]
-        df = pl.read_csv(f.read())
+    opts = s3.delta_storage_options
+    source_uri = f"s3://{source_bucket}/{source_key}"
+    # eager `read_csv` requires an fsspec backend (s3fs); `scan_csv` reads
+    # straight from the object store in Rust, so no filesystem client is needed
+    df = pl.scan_csv(source_uri, storage_options=opts).collect()
 
     context.log.info(
         f"Loaded {df.height:,} rows from CSV → {target_bucket}/{target_table}"
     )
 
     uri = f"s3://{target_bucket}/{target_table}"
-    opts = s3.delta_storage_options
     upsert_deltatable(
         uri, df, opts, predicate="t.id = s.id", target_alias="t", source_alias="s"
     )
@@ -168,20 +192,20 @@ def ingest_parquet(
     context: dg.AssetExecutionContext,
     s3: S3Resource,
 ) -> dg.MaterializeResult[None]:
+    source_bucket = "raw"
+    source_key = "changeme.parquet"
     target_bucket = "bronze"
     target_table = "parquet_table"
-    source_key = "raw/changeme.parquet"
 
-    fs = s3.get_filesystem()
-    with fs.open(source_key, mode="rb") as f:  # type: ignore[reportUnknownMemberType]
-        df = pl.read_parquet(f.read())
+    opts = s3.delta_storage_options
+    source_uri = f"s3://{source_bucket}/{source_key}"
+    df = pl.read_parquet(source_uri, storage_options=opts)
 
     context.log.info(
         f"Loaded {df.height:,} rows from Parquet → {target_bucket}/{target_table}"
     )
 
     uri = f"s3://{target_bucket}/{target_table}"
-    opts = s3.delta_storage_options
     upsert_deltatable(
         uri, df, opts, predicate="t.id = s.id", target_alias="t", source_alias="s"
     )
@@ -200,14 +224,14 @@ def ingest_xlsx(
     context: dg.AssetExecutionContext,
     s3: S3Resource,
 ) -> dg.MaterializeResult[None]:
+    source_bucket = "raw"
+    source_key = "changeme.xlsx"
     target_bucket = "bronze"
     target_table = "xlsx_table"
-    source_key = "raw/changeme.xlsx"
     sheet_name = "Sheet1"
 
-    fs = s3.get_filesystem()
-    with fs.open(source_key, mode="rb") as f:  # type: ignore[reportUnknownMemberType]
-        df = pl.read_excel(f.read(), sheet_name=sheet_name)
+    data = _get_s3_bytes(s3, source_bucket, source_key)
+    df = pl.read_excel(data, sheet_name=sheet_name)
 
     context.log.info(
         f"Loaded {df.height:,} rows from XLSX → {target_bucket}/{target_table}"
@@ -233,13 +257,13 @@ def ingest_json(
     context: dg.AssetExecutionContext,
     s3: S3Resource,
 ) -> dg.MaterializeResult[None]:
+    source_bucket = "raw"
+    source_key = "changeme.json"
     target_bucket = "bronze"
     target_table = "json_table"
-    source_key = "raw/changeme.json"
 
-    fs = s3.get_filesystem()
-    with fs.open(source_key, mode="rb") as f:  # type: ignore[reportUnknownMemberType]
-        df = pl.read_json(f.read())
+    data = _get_s3_bytes(s3, source_bucket, source_key)
+    df = pl.read_json(data)
 
     context.log.info(
         f"Loaded {df.height:,} rows from JSON → {target_bucket}/{target_table}"
@@ -260,20 +284,20 @@ def ingest_ndjson(
     context: dg.AssetExecutionContext,
     s3: S3Resource,
 ) -> dg.MaterializeResult[None]:
+    source_bucket = "raw"
+    source_key = "changeme.json"  # or .ndjson or .jsonl
     target_bucket = "bronze"
     target_table = "ndjson_table"
-    source_key = "raw/changeme.json"  # or .ndjson or .jsonl
 
-    fs = s3.get_filesystem()
-    with fs.open(source_key, mode="rb") as f:  # type: ignore[reportUnknownMemberType]
-        df = pl.read_ndjson(f.read())
+    opts = s3.delta_storage_options
+    source_uri = f"s3://{source_bucket}/{source_key}"
+    df = pl.read_ndjson(source_uri, storage_options=opts)
 
     context.log.info(
         f"Loaded {df.height:,} rows from NDJSON → {target_bucket}/{target_table}"
     )
 
     uri = f"s3://{target_bucket}/{target_table}"
-    opts = s3.delta_storage_options
     upsert_deltatable(
         uri, df, opts, predicate="t.id = s.id", target_alias="t", source_alias="s"
     )

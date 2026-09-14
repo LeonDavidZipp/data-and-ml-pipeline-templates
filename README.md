@@ -102,11 +102,11 @@ All ports and credentials can be overridden with environment variables — see `
 | `ingest_sql`      | SQL (any dialect via connection string) | connectorx → Delta (UPSERT) |
 | `ingest_duckdb`   | DuckDB          | duckdb → Delta              |
 | `ingest_http`     | REST API        | httpx → Delta               |
-| `ingest_csv`      | S3 CSV file     | s3fs → Polars               |
-| `ingest_parquet`  | S3 Parquet file | s3fs → Polars               |
-| `ingest_xlsx`     | S3 Excel file   | s3fs → Polars               |
-| `ingest_json`     | S3 JSON file    | s3fs → Polars               |
-| `ingest_ndjson`   | S3 NDJSON file  | s3fs → Polars               |
+| `ingest_csv`      | S3 CSV file     | Polars native (`scan_csv`)  |
+| `ingest_parquet`  | S3 Parquet file | Polars native (`read_parquet`) |
+| `ingest_xlsx`     | S3 Excel file   | boto3 → Polars              |
+| `ingest_json`     | S3 JSON file    | boto3 → Polars              |
+| `ingest_ndjson`   | S3 NDJSON file  | Polars native (`read_ndjson`) |
 
 ### Silver / Gold
 
@@ -126,7 +126,7 @@ All ports and credentials can be overridden with environment variables — see `
 | `sql`           | `SqlResource`      | Dialect-agnostic SQL connection (via connection string)      |
 | `duckdb_source` | `DuckDBResource`   | DuckDB file connector                                        |
 | `http`          | `HttpResource`     | HTTP API client with token auth                              |
-| `s3`            | `S3Resource`       | S3/RustFS access (Delta storage options + `s3fs` filesystem) |
+| `s3`            | `S3Resource`       | S3/RustFS credentials + Delta storage options (bring your own client — polars reads csv/parquet/ndjson natively via `storage_options`; `_get_s3_bytes()` in `bronze/assets.py` uses `boto3` for formats that need raw bytes, e.g. xlsx/json) |
 | `alerts`        | `AlertResource`    | Webhook notifications (Slack-compatible), disabled if empty  |
 | `mlflow`        | `mlflow_tracking`  | MLflow tracking (dagster-mlflow)                             |
 
@@ -202,5 +202,5 @@ Open http://localhost:3000 in your browser.
 | SQL                 | DuckDB, connectorx                     |
 | ML                  | XGBoost, Optuna, Prophet, scikit-learn |
 | Experiment tracking | MLflow                                 |
-| API / Cloud         | httpx, boto3, s3fs                     |
+| API / Cloud         | httpx, boto3                           |
 | Linting             | Ruff                                   |

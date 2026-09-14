@@ -163,6 +163,7 @@ services:
       AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID:-dp_rustfs_user}"
       AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY:-supersecret}"
       AWS_REGION: "${AWS_REGION:-us-east-1}"
+      AWS_ALLOW_HTTP: "${AWS_ALLOW_HTTP:-true}"
       MLFLOW_TRACKING_URI: "${MLFLOW_URL:-http://mlflow:5000}"
       HTTP_API_TOKEN: "${HTTP_API_TOKEN:-}"
       SQL_SOURCE_CONNECTION_URI: "${SQL_SOURCE_CONNECTION_URI:-}"

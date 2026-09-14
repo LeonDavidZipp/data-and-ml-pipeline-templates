@@ -4,7 +4,6 @@ from typing import Any
 
 import dagster as dg
 import httpx
-import s3fs  # type: ignore
 from dagster_mlflow import mlflow_tracking  # type: ignore[reportUnknownVariableType]
 
 from datascience_as_a_service.utils import retry
@@ -61,11 +60,21 @@ class HttpResource(dg.ConfigurableResource[Any]):
 
 
 class S3Resource(dg.ConfigurableResource[Any]):
+    """S3-compatible storage config. Bring your own client library.
+
+    Only holds credentials/config plus the storage-options dict that
+    `polars`/`deltalake` already understand natively — pass it straight to
+    `pl.read_parquet`/`scan_csv`/`read_ndjson`/`write_delta` for a native,
+    client-free cloud read. For formats with no native cloud reader (xlsx,
+    single-document json), build a client from these fields yourself; see
+    `_get_s3_bytes` (uses `boto3`) in `bronze/assets.py` for an example.
+    """
+
     endpoint_url: str = dg.EnvVar("AWS_ENDPOINT_URL")
     access_key: str = dg.EnvVar("AWS_ACCESS_KEY_ID")
     secret_key: str = dg.EnvVar("AWS_SECRET_ACCESS_KEY")
     region: str = dg.EnvVar("AWS_REGION")
-    allow_http: str = "false"
+    allow_http: str = dg.EnvVar("AWS_ALLOW_HTTP")
 
     @property
     def delta_storage_options(self) -> dict[str, str]:
@@ -76,17 +85,6 @@ class S3Resource(dg.ConfigurableResource[Any]):
             "aws_region": self.region,
             "aws_allow_http": self.allow_http,
         }
-
-    def get_filesystem(self) -> s3fs.S3FileSystem:
-        return s3fs.S3FileSystem(
-            anon=False,
-            key=self.access_key,
-            secret=self.secret_key,
-            client_kwargs={
-                "region_name": self.region,
-                "endpoint_url": self.endpoint_url,
-            },
-        )
 
 
 # ---------------------------------------------------------------------------

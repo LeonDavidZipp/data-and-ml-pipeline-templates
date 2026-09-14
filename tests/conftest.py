@@ -50,5 +50,4 @@ def mock_s3_resource() -> MagicMock:
         "aws_region": "us-east-1",
         "aws_allow_http": "true",
     }
-    resource.get_filesystem.return_value = MagicMock()
     return resource
